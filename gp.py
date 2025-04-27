@@ -2,19 +2,21 @@ r"""
 Gaussian Process (GP) model for Bayesian optimization.
 """
 
+import torch
 from torch import Tensor
-from torch.models import Model, SingleTaskGP
-from torch.models.transform.input import Normalize
+from botorch.models.model import Model
+from botorch.models import SingleTaskGP
+from botorch.models.transforms.input import Normalize
 from botorch.models.transforms.outcome import Standardize
 from botorch.fit import fit_gpytorch_mll
 from gpytorch.mlls import ExactMarginalLogLikelihood
 
 
-def ucb(mod: Model, x: Tensor, alpha: Tensor) -> Tensor:
+def ucb(mod: SingleTaskGP, x: Tensor, alpha: Tensor) -> Tensor:
     r"""
     Compute the Upper Confidence Bound (UCB) for a given model and input.
     Args:
-        mod: Model
+        mod: SingleTaskGP
             The Gaussian process model.
         x: Tensor
             The input data.
@@ -31,7 +33,7 @@ def ucb(mod: Model, x: Tensor, alpha: Tensor) -> Tensor:
     return mean + alpha * std
 
 
-def get_model(train_x: Tensor, train_y: Tensor, train_yvar: float) -> Model:
+def get_model(train_x: Tensor, train_y: Tensor, train_yvar: float) -> SingleTaskGP:
     r"""
     Fit a Gaussian process model to the data.
     Args:
@@ -46,10 +48,18 @@ def get_model(train_x: Tensor, train_y: Tensor, train_yvar: float) -> Model:
     model = SingleTaskGP(
         train_x,
         train_y,
-        train_yvar=train_yvar.expand_as(train_y),
+        train_Yvar=train_yvar * torch.ones_like(train_y),
         input_transform=Normalize(d=train_x.shape[-1]),
         outcome_transform=Standardize(m=1),
     ).to(train_x)
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
     fit_gpytorch_mll(mll)
     return model
+
+
+class ExpectationFunction:
+    def __init__(self, mod: Model):
+        self.mod = mod
+
+    def __call__(self, x: Tensor) -> Tensor:
+        return self.mod.forward(x).mean

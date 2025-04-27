@@ -1,0 +1,11 @@
+[project]
+name = "partial-ucb"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "botorch>=0.13.0",
+    "networkx>=3.4.2",
+    "torch>=2.7.0",
+]
