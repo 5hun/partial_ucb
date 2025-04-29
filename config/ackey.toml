@@ -1,0 +1,15 @@
+output_dir = "output/ackey"
+seed = 0
+function = "ackey"
+
+method = "partial-ucb"
+
+num_initial_samples = 1
+
+num_iter = 10
+
+[function_config]
+ndim = 2
+
+[method_config]
+alpha = 1.0

@@ -12,8 +12,8 @@ def ackey_f2(x: Tensor) -> Tensor:
 
 def ackey_f1(x: Tensor) -> Tensor:
     return (
-        20 * (-0.2 * x.norm(p=2, dim=-1)).exp()
-        + ((2 * np.pi * x).mean(dim=-1).cos()).exp()
+        20 * (-0.2 * x.norm(p=2, dim=-1, keepdim=True)).exp()
+        + ((2 * np.pi * x).mean(dim=-1, keepdim=True).cos()).exp()
         - 20
         - np.exp(1.0)
     )

@@ -2,6 +2,7 @@ r"""
 Gaussian Process (GP) model for Bayesian optimization.
 """
 
+from jaxtyping import Float
 import torch
 from torch import Tensor
 from botorch.models.model import Model
@@ -33,7 +34,9 @@ def ucb(mod: SingleTaskGP, x: Tensor, alpha: Tensor) -> Tensor:
     return mean + alpha * std
 
 
-def get_model(train_x: Tensor, train_y: Tensor, train_yvar: float) -> SingleTaskGP:
+def get_model(
+    train_x: Float[Tensor, "n d"], train_y: Float[Tensor, "n 1"], train_yvar: float
+) -> SingleTaskGP:
     r"""
     Fit a Gaussian process model to the data.
     Args:

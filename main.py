@@ -47,27 +47,33 @@ if __name__ == "__main__":
     function_config = config["function_config"]
     fun = FUNCTIONS[function_name](**function_config)
 
-    assert method_name == "partial_ucb", "Currently only partial_ucb is supported"
+    assert method_name == "partial-ucb", "Currently only partial-ucb is supported"
 
     method = query_algorithm.PartialUCB(fun=fun, **method_config)
 
     # Get initial samples
     initial_samples = util.uniform_sampling(config["num_initial_samples"], fun.bounds)
+    print(f"{initial_samples=}")
     initial_result = fun.eval(initial_samples)
     data = {}
     for nm, func in fun.name2func.items():
         if func.is_known:
             continue
         tmp_input = fun.get_input_tensor(nm, initial_result, initial_samples)
+        print(f"{tmp_input.shape=}")
+        print(f"{initial_result[nm].shape=}")
+        print(f"{initial_result=}")
+        assert tmp_input.shape == (initial_samples.shape[0], func.in_ndim)
+        assert initial_result[nm].shape == (initial_samples.shape[0], func.out_ndim)
         data[nm] = (tmp_input, initial_result[nm])
 
     sol, est_val = method.get_solution(data)
     real_res = fun.eval(sol)
-    real_val = real_res[fun.get_output_node()]
+    real_val = real_res[fun.get_output_node()].item()
     results = [
         {
             "iter": 0,
-            "estimated_solution": sol,
+            "estimated_solution": sol.tolist(),
             "estimated_value": est_val,
             "real_value": real_val,
         }
@@ -92,11 +98,11 @@ if __name__ == "__main__":
         new_sol, new_est = method.get_solution(data)
 
         real_res = fun.eval(new_sol)
-        real_val = real_res[fun.get_output_node()]
+        real_val = real_res[fun.get_output_node()].item()
         results.append(
             {
                 "iter": i + 1,
-                "estimated_solution": new_sol,
+                "estimated_solution": new_sol.tolist(),
                 "estimated_value": new_est,
                 "real_value": real_val,
             }

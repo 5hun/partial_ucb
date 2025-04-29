@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "botorch>=0.13.0",
+    "jaxtyping>=0.3.2",
     "networkx>=3.4.2",
     "torch>=2.7.0",
 ]

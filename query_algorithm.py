@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from jaxtyping import Float
 import torch
 from torch import Tensor
 
@@ -9,6 +10,7 @@ from botorch.acquisition.acquisition import AcquisitionFunction
 
 from functions import DAGFunction, Function
 import gp
+import optimize
 
 
 @dataclass(frozen=True)
@@ -79,9 +81,10 @@ class DAGUCB:
                     y.append(cache[nm][:, x_idx:x_idx_end])
         y = torch.cat(y, dim=-1)
 
-        func = self.fun.dag.nodes[node]["func"]
+        func_name: str = self.fun.dag.nodes[node]["func"]
+        func = self.fun.name2func[func_name]
         if func.is_known:
-            res = self.fun.eval_sub(func, y)
+            res = self.fun.eval_sub(func_name, y)
         else:
             x_idx, x_idx_end = self.noise_info[node]
             noise = self.alpha * x[:, x_idx:x_idx_end]
@@ -95,33 +98,9 @@ class DAGUCB:
         self._eval_node(res_node, cache, x)
         return cache
 
-
-class DAGUCBAcquisitionFunction(AcquisitionFunction):
-    def __init__(self, dagucb: DAGUCB):
-        dummy_model = botorch.models.SingleTaskGP(
-            torch.empty(0, 0),
-            torch.empty(0, 0),
-        )
-        super().__init__(model=dummy_model)
-        self.dagucb = dagucb
-
-    def forward(self, X: Tensor) -> Tensor:
-        cache = self.dagucb.eval(X)
-        return cache[self.dagucb.fun.get_output_node_name()]
-
-
-class DAGAcquisitionFunction(AcquisitionFunction):
-    def __init__(self, dag: DAGFunction):
-        dummy_model = botorch.models.SingleTaskGP(
-            torch.empty(0, 0),
-            torch.empty(0, 0),
-        )
-        super().__init__(model=dummy_model)
-        self.dag = dag
-
-    def forward(self, X: Tensor) -> Tensor:
-        cache = self.dag.eval(X)
-        return cache[self.dag.get_output_node_name()]
+    def __call__(self, x: Float[Tensor, "n d"]) -> Float[Tensor, "n 1"]:
+        res = self.eval(x)
+        return res[self.fun.get_output_node_name()]
 
 
 class PartialUCB(QueryAlgorithm):
@@ -130,27 +109,24 @@ class PartialUCB(QueryAlgorithm):
         self.alpha = alpha
         self.train_yvar = train_yvar
 
-    def _optimize_dag_function(
+    def _optimize_dagucb(
         self, models: dict[str, botorch.models.SingleTaskGP]
-    ) -> Tensor:
+    ) -> tuple[Tensor, float]:
         dagucb = DAGUCB(self.fun, self.alpha, models)
-        bounds = dagucb.bounds
-        acqf = DAGUCBAcquisitionFunction(dagucb)
-        result, _acqf_val = optimize_acqf(
-            acq_function=acqf,
-            bounds=bounds,
-            q=1,
-            num_restarts=10,
-            raw_samples=512,
-        )
-        return result
+        res = optimize.optimize(fun=dagucb, bounds=self.fun.bounds)
+        print(f"{res=}")
+        assert res.success
+        x = torch.tensor(res.x).reshape(1, -1)
+        fval = res.fun
+        return x, fval
 
     def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> QueryResponse:
         mods = {
             nm: gp.get_model(x, y, train_yvar=self.train_yvar)
             for nm, (x, y) in data.items()
         }
-        result = self._optimize_dag_function(mods)
+        result, _result_fval = self._optimize_dagucb(mods)
+        print(f"Optimize DAGUCB result: {result=}")
 
         name2func = self.fun.name2func.copy()
         for nm in mods:
@@ -162,8 +138,19 @@ class PartialUCB(QueryAlgorithm):
                 out_ndim=func.out_ndim,
             )
         tmp_fun = DAGFunction(name2func, self.fun.dag, self.fun.bounds)
+
         eval_cache = tmp_fun.eval(result)
         res_node = tmp_fun.get_output_node_name()
+
+        for nm in self.fun.name2func:
+            func = self.fun.name2func[nm]
+            if func.is_known:
+                continue
+            tmp_res = eval_cache[nm]
+            tmp_res.retain_grad()
+            assert tmp_res.requires_grad
+            assert tmp_res.grad_fn is not None
+
         eval_cache[res_node].backward()
 
         best_r = float("-inf")
@@ -174,6 +161,7 @@ class PartialUCB(QueryAlgorithm):
                 continue
             tmp_res = eval_cache[nm]
             tmp_grad = tmp_res.grad
+            print(f"{nm=}, {tmp_grad=}, {tmp_res=}, {tmp_res.requires_grad=}")
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
@@ -205,13 +193,8 @@ class PartialUCB(QueryAlgorithm):
                 out_ndim=func.out_ndim,
             )
         tmp_fun = DAGFunction(name2func, self.fun.dag, self.fun.bounds)
-        acqf = DAGAcquisitionFunction(tmp_fun)
-        bounds = tmp_fun.bounds
-        result, acqf_val = optimize_acqf(
-            acq_function=acqf,
-            bounds=bounds,
-            q=1,
-            num_restarts=10,
-            raw_samples=512,
-        )
-        return result, acqf_val.item()
+        res = optimize.optimize(tmp_fun, tmp_fun.bounds)
+        assert res.success
+        sol = torch.tensor(res.x).reshape(1, -1)
+        fval = res.fun
+        return sol, fval

@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
+from jaxtyping import Float
 import torch
 from torch import Tensor
 import numpy as np
@@ -14,6 +15,8 @@ class Function:
     in_ndim: int
     out_ndim: int
 
+    # TODO: Allow func can be None for unknown functions
+
 
 class DAGFunction:
     def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph, bounds: Tensor):
@@ -21,7 +24,7 @@ class DAGFunction:
         self.dag = dag
         self.bounds = bounds
 
-    def eval_sub(self, name: str, x: Tensor) -> Tensor:
+    def eval_sub(self, name: str, x: Float[Tensor, "n d"]) -> Float[Tensor, "n d2"]:
         return self.name2func[name].func(x)
 
     def get_output_node_name(self) -> str:
@@ -39,10 +42,11 @@ class DAGFunction:
             for x_idx, y_idx in self.dag.edges[m, node]["index"]:
                 inputs.append((m, x_idx, y_idx))
 
-        if "raw_input" in self.dag[node]:
-            for x_idx, y_idx in self.dag[node]["raw_input"]:
+        if "raw_input" in self.dag.nodes[node]:
+            for x_idx, y_idx in self.dag.nodes[node]["raw_input"]:
                 inputs.append(("__raw_input__", x_idx, y_idx))
 
+        assert len(inputs) > 0
         inputs.sort(key=lambda x: (x[2], x[1], x[0]))
         assert inputs[0][-1] == 0
         assert len(inputs) == inputs[-1][-1] + 1
@@ -92,7 +96,7 @@ class DAGFunction:
         res = self.eval_sub(func, y)
         cache[node] = res
 
-    def eval(self, x: Tensor) -> dict[str, Tensor]:
+    def eval(self, x: Float[Tensor, "n d"]) -> dict[str, Tensor]:
         cache = {}
         res_node = self.get_output_node()
         self._eval_node(res_node, cache, x)
@@ -107,3 +111,6 @@ class DAGFunction:
             len(no_out_deg_node) == 1
         ), "There should be only one node with no out degree"
         return no_out_deg_node[0]
+
+    def __call__(self, x: Float[Tensor, "n_d"]) -> Float[Tensor, "n 1"]:
+        return self.eval(x)[self.get_output_node()]
