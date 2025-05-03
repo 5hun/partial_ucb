@@ -113,7 +113,9 @@ class PartialUCB(QueryAlgorithm):
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, float]:
         dagucb = DAGUCB(self.fun, self.alpha, models)
-        res = optimize.optimize(fun=dagucb, bounds=self.fun.bounds)
+        res = optimize.optimize(
+            fun=dagucb, bounds=self.fun.bounds, num_initial_samples=100
+        )
         print(f"{res=}")
         assert res.success
         x = torch.tensor(res.x).reshape(1, -1)
@@ -165,13 +167,14 @@ class PartialUCB(QueryAlgorithm):
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
+            # TODO: Should we consider output transformation?
             cov = mods[nm].forward(tmp_input).covariance_matrix
-            print(f"{tmp_input.shape=}, {tmp_grad.shape=}, {cov.shape=}")
             r = tmp_grad @ (cov @ tmp_grad)
+            assert r >= 0
             if r > best_r:
                 best_r = r
                 best_response = QueryResponse(
-                    query_function=nm, query_input=tmp_input, info={"r": r}
+                    query_function=nm, query_input=tmp_input.detach(), info={"r": r}
                 )
         assert best_response is not None
         return best_response
@@ -193,7 +196,7 @@ class PartialUCB(QueryAlgorithm):
                 out_ndim=func.out_ndim,
             )
         tmp_fun = DAGFunction(name2func, self.fun.dag, self.fun.bounds)
-        res = optimize.optimize(tmp_fun, tmp_fun.bounds)
+        res = optimize.optimize(tmp_fun, tmp_fun.bounds, num_initial_samples=100)
         assert res.success
         sol = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun

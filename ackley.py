@@ -6,11 +6,11 @@ import numpy as np
 from functions import Function, DAGFunction
 
 
-def ackey_f2(x: Tensor) -> Tensor:
+def ackley_f2(x: Tensor) -> Tensor:
     return -x * (5 * x / (6 * np.pi)).sin()
 
 
-def ackey_f1(x: Tensor) -> Tensor:
+def ackley_f1(x: Tensor) -> Tensor:
     return (
         20 * (-0.2 * x.norm(p=2, dim=-1, keepdim=True)).exp()
         + ((2 * np.pi * x).mean(dim=-1, keepdim=True).cos()).exp()
@@ -19,10 +19,10 @@ def ackey_f1(x: Tensor) -> Tensor:
     )
 
 
-def get_ackey(ndim: int) -> DAGFunction:
+def get_ackley(ndim: int) -> DAGFunction:
     name2func = {
-        "f1": Function(func=ackey_f1, is_known=False, in_ndim=ndim, out_ndim=1),
-        "f2": Function(func=ackey_f2, is_known=False, in_ndim=1, out_ndim=1),
+        "f1": Function(func=ackley_f1, is_known=False, in_ndim=ndim, out_ndim=1),
+        "f2": Function(func=ackley_f2, is_known=False, in_ndim=1, out_ndim=1),
     }
 
     dag = nx.DiGraph()

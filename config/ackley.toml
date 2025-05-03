@@ -1,10 +1,10 @@
-output_dir = "output/ackey"
+output_dir = "output/ackley"
 seed = 0
-function = "ackey"
+function = "ackley"
 
 method = "partial-ucb"
 
-num_initial_samples = 1
+num_initial_samples = 5
 
 num_iter = 10
 

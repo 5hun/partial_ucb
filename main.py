@@ -10,11 +10,11 @@ import torch
 
 import util
 import functions
-import ackey
+import ackley
 import query_algorithm
 
 FUNCTIONS = {
-    "ackey": ackey.get_ackey,
+    "ackley": ackley.get_ackley,
 }
 
 
