@@ -61,7 +61,7 @@ def get_model(
 
 
 class ExpectationFunction:
-    def __init__(self, mod: Model):
+    def __init__(self, mod: SingleTaskGP):
         self.mod = mod
 
     def __call__(self, x: Tensor) -> Tensor:
