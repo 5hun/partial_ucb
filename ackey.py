@@ -30,6 +30,6 @@ def get_ackey(ndim: int) -> DAGFunction:
     dag.add_node("f2", func="f2")
     dag.add_edge("f1", "f2", index=[(0, 0)])
 
-    bounds = torch.tensor([[-2.0, -2.0], [2.0, 2.0]])
+    bounds = torch.tensor([[-2.0 for _ in range(ndim)], [2.0 for _ in range(ndim)]])
 
     return DAGFunction(name2func=name2func, dag=dag, bounds=bounds)

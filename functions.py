@@ -24,6 +24,8 @@ class DAGFunction:
         self.dag = dag
         self.bounds = bounds
 
+        assert bounds.shape[0] == 2
+
     def eval_sub(self, name: str, x: Float[Tensor, "n d"]) -> Float[Tensor, "n d2"]:
         return self.name2func[name].func(x)
 

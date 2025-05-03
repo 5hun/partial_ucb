@@ -65,4 +65,4 @@ class ExpectationFunction:
         self.mod = mod
 
     def __call__(self, x: Tensor) -> Tensor:
-        return self.mod.forward(x).mean
+        return self.mod.posterior(x).mean
