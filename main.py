@@ -11,11 +11,10 @@ import torch
 import util
 import functions
 import ackley
+import norm
 import query_algorithm
 
-FUNCTIONS = {
-    "ackley": ackley.get_ackley,
-}
+FUNCTIONS = {"ackley": ackley.get_ackley, "norm": norm.get_norm}
 
 
 def set_random_seed(seed: int):
@@ -70,14 +69,21 @@ if __name__ == "__main__":
     sol, est_val = method.get_solution(data)
     real_res = fun.eval(sol)
     real_val = real_res[fun.get_output_node()].item()
-    results = [
-        {
-            "iter": 0,
-            "estimated_solution": sol.tolist(),
-            "estimated_value": est_val,
-            "real_value": real_val,
-        }
-    ]
+    results = {
+        "init": {
+            "initial_samples": {
+                nm: {
+                    "input": data[nm][0].tolist(),
+                    "output": data[nm][1].tolist(),
+                }
+                for nm in data
+            },
+            "estimated_solution": sol.tolist()[0],
+            "estimated_objective": est_val,
+            "true_objective": real_val,
+        },
+        "iter": [],
+    }
 
     with open(output_dir / "results_itermediate.json", "w") as fout:
         json.dump(results, fout, indent=4)
@@ -99,12 +105,17 @@ if __name__ == "__main__":
 
         real_res = fun.eval(new_sol)
         real_val = real_res[fun.get_output_node()].item()
-        results.append(
+        results["iter"].append(
             {
                 "iter": i + 1,
-                "estimated_solution": new_sol.tolist(),
-                "estimated_value": new_est,
-                "real_value": real_val,
+                "estimated_solution": new_sol.tolist()[0],
+                "estimated_objective": new_est,
+                "true_objective": real_val,
+                "query": {
+                    "function": query.query_function,
+                    "input": query.query_input.tolist()[0],
+                    "acquisition_value": query.info["r"],
+                },
             }
         )
 

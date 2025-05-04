@@ -86,7 +86,10 @@ class DAGUCB:
         if func.is_known:
             res = self.fun.eval_sub(func_name, y)
         else:
+            noise_offset = self.fun.bounds.shape[1]
             x_idx, x_idx_end = self.noise_info[node]
+            x_idx += noise_offset
+            x_idx_end += noise_offset
             noise = self.alpha * x[:, x_idx:x_idx_end]
             res = gp.ucb(self.mods[node], y, noise)
 
@@ -104,30 +107,38 @@ class DAGUCB:
 
 
 class PartialUCB(QueryAlgorithm):
-    def __init__(self, fun: DAGFunction, alpha: float, train_yvar: float = 1e-4):
+    def __init__(self, fun: DAGFunction, alpha: float, train_yvar: float = 1e-5):
         self.fun = fun
         self.alpha = alpha
         self.train_yvar = train_yvar
+        self.previous_sols = None
 
     def _optimize_dagucb(
         self, models: dict[str, botorch.models.SingleTaskGP]
-    ) -> tuple[Tensor, float]:
+    ) -> tuple[Tensor, Tensor, float]:
         dagucb = DAGUCB(self.fun, self.alpha, models)
         res = optimize.optimize(
-            fun=dagucb, bounds=self.fun.bounds, num_initial_samples=100
+            fun=dagucb, bounds=dagucb.bounds, num_initial_samples=100
         )
         print(f"{res=}")
         assert res.success
-        x = torch.tensor(res.x).reshape(1, -1)
+        x_org = torch.tensor(res.x).reshape(1, -1)
+        x = x_org[:, : self.fun.bounds.shape[1]]
+        noise = x_org[:, self.fun.bounds.shape[1] :]
         fval = res.fun
-        return x, fval
+        return x, noise, fval
 
     def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> QueryResponse:
+        shapes = {
+            nm: (x.shape, y.shape)
+            for nm, (x, y) in data.items()
+            if not self.fun.name2func[nm].is_known
+        }
         mods = {
             nm: gp.get_model(x, y, train_yvar=self.train_yvar)
             for nm, (x, y) in data.items()
         }
-        result, _result_fval = self._optimize_dagucb(mods)
+        result, _noise, _result_fval = self._optimize_dagucb(mods)
         print(f"Optimize DAGUCB result: {result=}")
 
         name2func = self.fun.name2func.copy()
@@ -163,13 +174,12 @@ class PartialUCB(QueryAlgorithm):
                 continue
             tmp_res = eval_cache[nm]
             tmp_grad = tmp_res.grad
-            print(f"{nm=}, {tmp_grad=}, {tmp_res=}, {tmp_res.requires_grad=}")
+
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
-            # TODO: Should we consider output transformation?
-            cov = mods[nm].forward(tmp_input).covariance_matrix
-            r = tmp_grad @ (cov @ tmp_grad)
+            cov = mods[nm].posterior(tmp_input).covariance_matrix
+            r = (tmp_grad @ (cov @ tmp_grad)).item()
             assert r >= 0
             if r > best_r:
                 best_r = r
@@ -200,4 +210,17 @@ class PartialUCB(QueryAlgorithm):
         assert res.success
         sol = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun
+
+        if self.previous_sols is None:
+            self.previous_sols = sol
+        else:
+            self.previous_sols = torch.cat((self.previous_sols, sol), dim=0)
+
+        if self.previous_sols.shape[0] > 0:
+            with torch.no_grad():
+                prev_vals = tmp_fun(self.previous_sols)
+                best_idx = torch.argmin(prev_vals)
+                sol = self.previous_sols[best_idx].reshape(1, -1)
+                fval = prev_vals[best_idx].item()
+
         return sol, fval
