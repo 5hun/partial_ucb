@@ -7,23 +7,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
-def visualize(config: dict) -> None:
-    output_dir = Path(config["output_dir"])
-
-    sol_file = output_dir / "results.json"
-    if not sol_file.exists():
-        sol_file = output_dir / "results_intermediate.json"
-    if not sol_file.exists():
-        raise FileNotFoundError(
-            f"Solution files results.json and results_intermediate.json are not found."
-        )
-
-    with open(sol_file, "r") as fin:
-        result = json.load(fin)
-
-    vis_dir = output_dir / "visualization"
-    vis_dir.mkdir(parents=True, exist_ok=True)
-
+def plot_objective_values(result: dict, vis_dir: Path) -> None:
     obj_vals = np.array(
         [result["init"]["true_objective"]]
         + [x["true_objective"] for x in result["iter"]]
@@ -35,7 +19,6 @@ def visualize(config: dict) -> None:
     acq_vals = np.array(
         [float("nan")] + [x["query"]["acquisition_value"] for x in result["iter"]]
     )
-    print(f"{obj_vals=}, {est_vals=}, {acq_vals=}")
 
     fig, axs = plt.subplots(3, 1, figsize=(10, 12))
     axs[0].plot(obj_vals, label="True Objective")
@@ -61,6 +44,8 @@ def visualize(config: dict) -> None:
     plt.savefig(vis_dir / "objective_values.png")
     plt.close(fig)
 
+
+def plot_query_inputs(result: dict, vis_dir: Path) -> None:
     names = sorted(
         set(x["query"]["function"] for x in result["iter"])
         | set(result["init"]["initial_samples"].keys())
@@ -76,7 +61,6 @@ def visualize(config: dict) -> None:
             ]
         )
         dim = init_inputs.shape[1]
-        print(f"{nm=}, {query_inputs=}")
         if dim > 2:
             print(f"Skipping {nm} because it has more than 2 dimensions.")
             continue
@@ -109,6 +93,49 @@ def visualize(config: dict) -> None:
         ax.legend()
         plt.savefig(vis_dir / f"{nm}_query_inputs.png")
         plt.close(fig)
+
+
+def plot_proposed_solutions(result: dict, vis_dir: Path) -> None:
+    solutions = [result["init"]["estimated_solution"]] + [
+        x["estimated_solution"] for x in result["iter"]
+    ]
+    solutions = np.array(solutions)
+
+    fig, ax = plt.subplots(figsize=(8, 6))
+    ax.plot(solutions[:, 0], solutions[:, 1], "o", label="Proposed Solutions")
+    for i, point in enumerate(solutions):
+        ax.annotate(
+            str(i + 1),
+            (point[0], point[1]),
+            xytext=(5, 5),
+            textcoords="offset points",
+        )
+    ax.set_title("Proposed Solutions")
+    ax.legend()
+    plt.savefig(vis_dir / "proposed_solutions.png")
+    plt.close(fig)
+
+
+def visualize(config: dict) -> None:
+    output_dir = Path(config["output_dir"])
+
+    sol_file = output_dir / "results.json"
+    if not sol_file.exists():
+        sol_file = output_dir / "results_intermediate.json"
+    if not sol_file.exists():
+        raise FileNotFoundError(
+            f"Solution files results.json and results_intermediate.json are not found."
+        )
+
+    with open(sol_file, "r") as fin:
+        result = json.load(fin)
+
+    vis_dir = output_dir / "visualization"
+    vis_dir.mkdir(parents=True, exist_ok=True)
+
+    plot_objective_values(result, vis_dir)
+    plot_query_inputs(result, vis_dir)
+    plot_proposed_solutions(result, vis_dir)
 
 
 if __name__ == "__main__":
