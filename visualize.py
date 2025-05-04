@@ -88,6 +88,13 @@ def visualize(config: dict) -> None:
             ax.plot(
                 query_inputs, np.zeros_like(query_inputs), "o", label="Query Inputs"
             )
+            for i, point in enumerate(query_inputs):
+                ax.annotate(
+                    str(i + 1),
+                    (point, 0),
+                    xytext=(5, 5),
+                    textcoords="offset points",
+                )
         else:
             ax.plot(init_inputs[:, 0], init_inputs[:, 1], "o", label="Initial Inputs")
             ax.plot(query_inputs[:, 0], query_inputs[:, 1], "o", label="Query Inputs")
