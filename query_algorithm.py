@@ -7,25 +7,40 @@ from torch import Tensor
 
 import botorch
 
-from functions import DAGFunction, Function, Problem
+from functions import DAGFunction, Function, Problem, ObjectiveSense
 import gp
 import optimize
+import util
 
 
 @dataclass(frozen=True)
-class QueryResponse:
+class PartialQueryResponse:
     query_function: str
     query_input: Tensor
     info: dict
 
 
-class QueryAlgorithm:
-    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> QueryResponse:
+class PartialQueryAlgorithm:
+    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> PartialQueryResponse:
         raise NotImplementedError()
 
     def get_solution(
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
+        raise NotImplementedError()
+
+
+@dataclass(frozen=True)
+class FullQueryResponse:
+    query_input: Tensor
+    info: dict
+
+
+class FullQueryAlgorithm:
+    def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
+        raise NotImplementedError()
+
+    def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
         raise NotImplementedError()
 
 
@@ -106,7 +121,7 @@ class DAGUCB:
         return res[self.fun.get_output_node_name()]
 
 
-class PartialUCB(QueryAlgorithm):
+class PartialUCB(PartialQueryAlgorithm):
     def __init__(
         self,
         problem: Problem,
@@ -139,7 +154,7 @@ class PartialUCB(QueryAlgorithm):
         fval = res.fun
         return x, noise, fval
 
-    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> QueryResponse:
+    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> PartialQueryResponse:
         mods = {
             nm: gp.get_model(x, y, train_yvar=self.train_yvar)
             for nm, (x, y) in data.items()
@@ -189,7 +204,7 @@ class PartialUCB(QueryAlgorithm):
             assert r >= 0
             if r > best_r:
                 best_r = r
-                best_response = QueryResponse(
+                best_response = PartialQueryResponse(
                     query_function=nm, query_input=tmp_input.detach(), info={"r": r}
                 )
         assert best_response is not None
@@ -235,3 +250,116 @@ class PartialUCB(QueryAlgorithm):
                 fval = prev_vals[best_idx].item() * self.problem.sense.value
 
         return sol, fval
+
+
+class Random(FullQueryAlgorithm):
+    def __init__(self, problem: Problem, _logger: logging.Logger):
+        self.problem = problem
+
+    def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
+        new_input = util.uniform_sampling(1, self.problem.bounds)
+        return FullQueryResponse(query_input=new_input, info={})
+
+    def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
+        train_Y = train_Y * self.problem.sense.value
+        best_idx = torch.argmin(train_Y)
+        best_sol = train_X[best_idx].reshape(1, -1)
+        best_val = train_Y[best_idx].item() * self.problem.sense.value
+        return best_sol, best_val
+
+
+class FullUCB(FullQueryAlgorithm):
+    def __init__(
+        self,
+        problem: Problem,
+        alpha: float,
+        logger: logging.Logger,
+        train_yvar: float = 1e-5,
+    ):
+        self.problem = problem
+        self.fun = problem.obj
+        self.alpha = alpha
+        self.train_yvar = train_yvar
+        self.logger = logger
+
+    def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
+        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        res = optimize.optimize(
+            fun=gp.UCBFunction(
+                model,
+                self.alpha,
+                lower=True if self.problem.sense == ObjectiveSense.MINIMIZE else False,
+            ),
+            bounds=self.problem.bounds,
+            num_initial_samples=100,
+            sense=self.problem.sense,
+        )
+        self.logger.debug(f"Optimize UCB result: {res}")
+        assert res.success
+        x = torch.tensor(res.x).reshape(1, -1)
+        return FullQueryResponse(query_input=x, info={"r": res.fun})
+
+    def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
+        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        res = optimize.optimize(
+            fun=gp.ExpectationFunction(model),
+            bounds=self.problem.bounds,
+            num_initial_samples=100,
+            sense=self.problem.sense,
+        )
+        assert res.success
+        x = torch.tensor(res.x).reshape(1, -1)
+        fval = res.fun
+        return x, fval
+
+
+class FullLogEI(FullQueryAlgorithm):
+    def __init__(
+        self,
+        problem: Problem,
+        logger: logging.Logger,
+        train_yvar: float = 1e-5,
+    ):
+        self.problem = problem
+        self.fun = problem.obj
+        self.train_yvar = train_yvar
+        self.logger = logger
+
+    def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
+        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+
+        best_f = (
+            train_Y.max()
+            if self.problem.sense == ObjectiveSense.MAXIMIZE
+            else train_Y.min()
+        ).item()
+        logei_acq = botorch.acquisition.LogExpectedImprovement(
+            model=model,
+            best_f=best_f,
+            maximize=True if self.problem.sense == ObjectiveSense.MAXIMIZE else False,
+        )
+        res = optimize.optimize(
+            fun=lambda x: logei_acq.forward(x.reshape(-1, 1, x.shape[-1])).reshape(
+                -1, 1
+            ),
+            bounds=self.problem.bounds,
+            num_initial_samples=100,
+            sense=ObjectiveSense.MAXIMIZE,
+        )
+        self.logger.debug(f"Optimize LogEI result: {res}")
+        assert res.success
+        x = torch.tensor(res.x).reshape(1, -1)
+        return FullQueryResponse(query_input=x, info={"r": res.fun})
+
+    def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
+        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        res = optimize.optimize(
+            fun=gp.ExpectationFunction(model),
+            bounds=self.problem.bounds,
+            num_initial_samples=100,
+            sense=self.problem.sense,
+        )
+        assert res.success
+        x = torch.tensor(res.x).reshape(1, -1)
+        fval = res.fun
+        return x, fval

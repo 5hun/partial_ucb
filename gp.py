@@ -66,3 +66,19 @@ class ExpectationFunction:
 
     def __call__(self, x: Tensor) -> Tensor:
         return self.mod.posterior(x).mean
+
+
+class UCBFunction:
+    def __init__(self, mod: SingleTaskGP, alpha: float, lower: bool):
+        self.mod = mod
+        self.alpha = alpha
+        self.lower = lower
+
+    def __call__(self, x: Tensor) -> Tensor:
+        posterior = self.mod.posterior(x)
+        mean = posterior.mean
+        std = posterior.variance.sqrt()
+        if self.lower:
+            return mean - self.alpha * std
+        else:
+            return mean + self.alpha * std

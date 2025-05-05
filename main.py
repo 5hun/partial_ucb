@@ -19,6 +19,13 @@ import query_algorithm
 
 FUNCTIONS = {"ackley": ackley.get_ackley, "norm": norm.get_norm}
 
+METHODS = {
+    "partial-ucb": query_algorithm.PartialUCB,
+    "full-ucb": query_algorithm.FullUCB,
+    "full-logei": query_algorithm.FullLogEI,
+    "random": query_algorithm.Random,
+}
+
 
 def set_random_seed(seed: int):
     r"""Set the random seed for reproducibility."""
@@ -61,42 +68,12 @@ def setup_logging(output_dir: Path, log_level: str):
     return logger
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config", type=str)
-    args = parser.parse_args()
-
-    with open(args.config, "rb") as fin:
-        config = tml.load(fin)
-
-    output_dir = Path(config["output_dir"])
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Set up logging
-    log_level = config.get("log_level", "INFO")
-    logger = setup_logging(output_dir, log_level)
-
-    shutil.copy(args.config, output_dir / "config.toml")
-    logger.debug(f"Config file copied to {output_dir / 'config.toml'}")
-
-    set_random_seed(config["seed"])
-    logger.debug(f"Random seed set to {config['seed']}")
-
-    method_name = config["method"]
-    method_config = config["method_config"]
-    logger.debug(f"Method: {method_name}, Config: {method_config}")
-
-    function_name = config["function"]
-    function_config = config["function_config"]
-    logger.debug(f"Function: {function_name}, Config: {function_config}")
-
-    problem = FUNCTIONS[function_name](**function_config)
-
-    assert method_name == "partial-ucb", "Currently only partial-ucb is supported"
-
-    method = query_algorithm.PartialUCB(problem=problem, logger=logger, **method_config)
-    logger.debug("Method initialized")
-
+def main_loop_partial(
+    method: query_algorithm.PartialQueryAlgorithm,
+    problem: functions.Problem,
+    config: dict,
+    logger: logging.Logger,
+):
     # Get initial samples
     initial_samples = util.uniform_sampling(
         config["num_initial_samples"], problem.bounds
@@ -179,3 +156,121 @@ if __name__ == "__main__":
     with open(output_dir / "results.json", "w") as fout:
         json.dump(results, fout, indent=4)
     logger.debug("Final results saved")
+
+
+def main_loop_full(
+    method: query_algorithm.FullQueryAlgorithm,
+    problem: functions.Problem,
+    config: dict,
+    logger: logging.Logger,
+):
+    # Get initial samples
+    train_X = util.uniform_sampling(config["num_initial_samples"], problem.bounds)
+    logger.debug(f"Generated {config['num_initial_samples']} initial samples")
+
+    train_Y = problem.obj(train_X)
+
+    sol, est_val = method.get_solution(train_X, train_Y)
+
+    real_res = problem.obj.eval(sol)
+    real_val = real_res[problem.obj.get_output_node()].item()
+    results = {
+        "init": {
+            "initial_samples": {
+                "__full__": {
+                    "input": train_X.tolist(),
+                    "output": train_Y.tolist(),
+                }
+            },
+            "estimated_solution": sol.tolist()[0],
+            "estimated_objective": est_val,
+            "true_objective": real_val,
+        },
+        "iter": [],
+    }
+    logger.debug("Initial results computed")
+
+    with open(output_dir / "results_itermediate.json", "w") as fout:
+        json.dump(results, fout, indent=4)
+    logger.debug("Initial results saved to intermediate file")
+
+    num_iter = config["num_iter"]
+    for i in tqdm(range(num_iter), desc="Iterations"):
+        query = method.step(train_X, train_Y)
+        res = problem.obj(query.query_input)
+
+        train_X = torch.cat((train_X, query.query_input), dim=0)
+        train_Y = torch.cat((train_Y, res), dim=0)
+        logger.debug(f"Iteration {i + 1}: Data updated")
+
+        new_sol, new_est = method.get_solution(train_X, train_Y)
+        real_res = problem.obj(new_sol)
+
+        results["iter"].append(
+            {
+                "iter": i + 1,
+                "estimated_solution": new_sol.tolist()[0],
+                "estimated_objective": new_est,
+                "true_objective": real_val,
+                "query": {
+                    "function": "__full__",
+                    "input": query.query_input.tolist()[0],
+                    "acquisition_value": query.info["r"],
+                },
+            }
+        )
+        logger.debug(f"Iteration {i + 1}: Results updated")
+
+        with open(output_dir / "results_itermediate.json", "w") as fout:
+            json.dump(results, fout, indent=4)
+        logger.debug(f"Iteration {i + 1}: Results saved to intermediate file")
+
+    with open(output_dir / "results.json", "w") as fout:
+        json.dump(results, fout, indent=4)
+    logger.debug("Final results saved")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", type=str)
+    args = parser.parse_args()
+
+    with open(args.config, "rb") as fin:
+        config = tml.load(fin)
+
+    output_dir = Path(config["output_dir"])
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set up logging
+    log_level = config.get("log_level", "INFO")
+    logger = setup_logging(output_dir, log_level)
+
+    shutil.copy(args.config, output_dir / "config.toml")
+    logger.debug(f"Config file copied to {output_dir / 'config.toml'}")
+
+    set_random_seed(config["seed"])
+    logger.debug(f"Random seed set to {config['seed']}")
+
+    method_name = config["method"]
+    method_config = config["method_config"]
+    logger.debug(f"Method: {method_name}, Config: {method_config}")
+
+    function_name = config["function"]
+    function_config = config["function_config"]
+    logger.debug(f"Function: {function_name}, Config: {function_config}")
+
+    problem = FUNCTIONS[function_name](**function_config)
+
+    assert method_name in METHODS, f"Method {method_name} is not supported"
+
+    # method = query_algorithm.PartialUCB(problem=problem, logger=logger, **method_config)
+    method: (
+        query_algorithm.PartialQueryAlgorithm | query_algorithm.FullQueryAlgorithm
+    ) = METHODS[method_name](problem=problem, logger=logger, **method_config)
+    logger.debug(f"Method {method_name} initialized")
+
+    if isinstance(method, query_algorithm.PartialQueryAlgorithm):
+        main_loop_partial(method, problem, config, logger)
+    else:
+        assert isinstance(method, query_algorithm.FullQueryAlgorithm)
+        main_loop_full(method, problem, config, logger)
