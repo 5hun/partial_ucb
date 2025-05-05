@@ -10,8 +10,8 @@ import torch
 
 import util
 import functions
-import ackley
-import norm
+import benchmarks.ackley as ackley
+import benchmarks.norm as norm
 import query_algorithm
 
 FUNCTIONS = {"ackley": ackley.get_ackley, "norm": norm.get_norm}
@@ -44,31 +44,29 @@ if __name__ == "__main__":
 
     function_name = config["function"]
     function_config = config["function_config"]
-    fun = FUNCTIONS[function_name](**function_config)
+    problem = FUNCTIONS[function_name](**function_config)
 
     assert method_name == "partial-ucb", "Currently only partial-ucb is supported"
 
-    method = query_algorithm.PartialUCB(fun=fun, **method_config)
+    method = query_algorithm.PartialUCB(problem=problem, **method_config)
 
     # Get initial samples
-    initial_samples = util.uniform_sampling(config["num_initial_samples"], fun.bounds)
-    print(f"{initial_samples=}")
-    initial_result = fun.eval(initial_samples)
+    initial_samples = util.uniform_sampling(
+        config["num_initial_samples"], problem.bounds
+    )
+    initial_result = problem.obj.eval(initial_samples)
     data = {}
-    for nm, func in fun.name2func.items():
+    for nm, func in problem.obj.name2func.items():
         if func.is_known:
             continue
-        tmp_input = fun.get_input_tensor(nm, initial_result, initial_samples)
-        print(f"{tmp_input.shape=}")
-        print(f"{initial_result[nm].shape=}")
-        print(f"{initial_result=}")
+        tmp_input = problem.obj.get_input_tensor(nm, initial_result, initial_samples)
         assert tmp_input.shape == (initial_samples.shape[0], func.in_ndim)
         assert initial_result[nm].shape == (initial_samples.shape[0], func.out_ndim)
         data[nm] = (tmp_input, initial_result[nm])
 
     sol, est_val = method.get_solution(data)
-    real_res = fun.eval(sol)
-    real_val = real_res[fun.get_output_node()].item()
+    real_res = problem.obj.eval(sol)
+    real_val = real_res[problem.obj.get_output_node()].item()
     results = {
         "init": {
             "initial_samples": {
@@ -92,7 +90,7 @@ if __name__ == "__main__":
     for i in range(num_iter):
         print(f"Iteration {i + 1}/{num_iter}")
         query = method.step(data)
-        res = fun.eval_sub(query.query_function, query.query_input)
+        res = problem.obj.eval_sub(query.query_function, query.query_input)
 
         data_input = data[query.query_function][0]
         data_output = data[query.query_function][1]
@@ -103,8 +101,8 @@ if __name__ == "__main__":
 
         new_sol, new_est = method.get_solution(data)
 
-        real_res = fun.eval(new_sol)
-        real_val = real_res[fun.get_output_node()].item()
+        real_res = problem.obj.eval(new_sol)
+        real_val = real_res[problem.obj.get_output_node()].item()
         results["iter"].append(
             {
                 "iter": i + 1,

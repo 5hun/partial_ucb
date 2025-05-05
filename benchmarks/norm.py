@@ -1,10 +1,10 @@
 import torch
 import networkx as nx
 
-from functions import Function, DAGFunction
+from functions import Function, DAGFunction, Problem, ObjectiveSense
 
 
-def get_norm(ndim: int, p: int) -> DAGFunction:
+def get_norm(ndim: int, p: int) -> Problem:
     name2func = {
         "f1": Function(
             func=lambda x: x.norm(p=p, dim=-1, keepdim=True),
@@ -18,4 +18,8 @@ def get_norm(ndim: int, p: int) -> DAGFunction:
     bounds = torch.tensor(
         [[-1.0 for _ in range(ndim)], [1.0 for _ in range(ndim)]], dtype=torch.double
     )
-    return DAGFunction(name2func=name2func, dag=dag, bounds=bounds)
+    return Problem(
+        obj=DAGFunction(name2func=name2func, dag=dag),
+        sense=ObjectiveSense.MINIMIZE,
+        bounds=bounds,
+    )

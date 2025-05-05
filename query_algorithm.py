@@ -5,10 +5,8 @@ import torch
 from torch import Tensor
 
 import botorch
-from botorch.optim.optimize import optimize_acqf
-from botorch.acquisition.acquisition import AcquisitionFunction
 
-from functions import DAGFunction, Function
+from functions import DAGFunction, Function, Problem
 import gp
 import optimize
 
@@ -33,11 +31,12 @@ class QueryAlgorithm:
 class DAGUCB:
     def __init__(
         self,
-        fun: DAGFunction,
+        problem: Problem,
         alpha: float,
         mods: dict[str, botorch.models.SingleTaskGP],
     ):
-        self.fun = fun
+        self.problem = problem
+        self.fun = problem.obj
         self.alpha = alpha
         self.mods = mods
 
@@ -45,7 +44,7 @@ class DAGUCB:
         num_noise = sum([y - x for x, y in self.noise_info.values()])
         self.bounds = torch.cat(
             [
-                fun.bounds,
+                problem.bounds,
                 torch.tensor([[-1] * num_noise, [1] * num_noise], dtype=torch.float32),
             ],
             dim=1,
@@ -86,7 +85,7 @@ class DAGUCB:
         if func.is_known:
             res = self.fun.eval_sub(func_name, y)
         else:
-            noise_offset = self.fun.bounds.shape[1]
+            noise_offset = self.problem.bounds.shape[1]
             x_idx, x_idx_end = self.noise_info[node]
             x_idx += noise_offset
             x_idx_end += noise_offset
@@ -107,8 +106,9 @@ class DAGUCB:
 
 
 class PartialUCB(QueryAlgorithm):
-    def __init__(self, fun: DAGFunction, alpha: float, train_yvar: float = 1e-5):
-        self.fun = fun
+    def __init__(self, problem: Problem, alpha: float, train_yvar: float = 1e-5):
+        self.problem = problem
+        self.fun = problem.obj
         self.alpha = alpha
         self.train_yvar = train_yvar
         self.previous_sols = None
@@ -116,24 +116,22 @@ class PartialUCB(QueryAlgorithm):
     def _optimize_dagucb(
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, Tensor, float]:
-        dagucb = DAGUCB(self.fun, self.alpha, models)
+        dagucb = DAGUCB(self.problem, self.alpha, models)
         res = optimize.optimize(
-            fun=dagucb, bounds=dagucb.bounds, num_initial_samples=100
+            fun=dagucb,
+            bounds=dagucb.bounds,
+            num_initial_samples=100,
+            sense=self.problem.sense,
         )
         print(f"{res=}")
         assert res.success
         x_org = torch.tensor(res.x).reshape(1, -1)
-        x = x_org[:, : self.fun.bounds.shape[1]]
-        noise = x_org[:, self.fun.bounds.shape[1] :]
+        x = x_org[:, : self.problem.bounds.shape[1]]
+        noise = x_org[:, self.problem.bounds.shape[1] :]
         fval = res.fun
         return x, noise, fval
 
     def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> QueryResponse:
-        shapes = {
-            nm: (x.shape, y.shape)
-            for nm, (x, y) in data.items()
-            if not self.fun.name2func[nm].is_known
-        }
         mods = {
             nm: gp.get_model(x, y, train_yvar=self.train_yvar)
             for nm, (x, y) in data.items()
@@ -150,7 +148,7 @@ class PartialUCB(QueryAlgorithm):
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = DAGFunction(name2func, self.fun.dag, self.fun.bounds)
+        tmp_fun = DAGFunction(name2func, self.fun.dag)
 
         eval_cache = tmp_fun.eval(result)
         res_node = tmp_fun.get_output_node_name()
@@ -205,8 +203,13 @@ class PartialUCB(QueryAlgorithm):
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = DAGFunction(name2func, self.fun.dag, self.fun.bounds)
-        res = optimize.optimize(tmp_fun, tmp_fun.bounds, num_initial_samples=100)
+        tmp_fun = DAGFunction(name2func, self.fun.dag)
+        res = optimize.optimize(
+            tmp_fun,
+            self.problem.bounds,
+            num_initial_samples=100,
+            sense=self.problem.sense,
+        )
         assert res.success
         sol = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun
@@ -218,9 +221,9 @@ class PartialUCB(QueryAlgorithm):
 
         if self.previous_sols.shape[0] > 0:
             with torch.no_grad():
-                prev_vals = tmp_fun(self.previous_sols)
+                prev_vals = tmp_fun(self.previous_sols) * self.problem.sense.value
                 best_idx = torch.argmin(prev_vals)
                 sol = self.previous_sols[best_idx].reshape(1, -1)
-                fval = prev_vals[best_idx].item()
+                fval = prev_vals[best_idx].item() * self.problem.sense.value
 
         return sol, fval

@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from enum import Enum
 from typing import Callable
 
 from jaxtyping import Float
@@ -19,12 +20,9 @@ class Function:
 
 
 class DAGFunction:
-    def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph, bounds: Tensor):
+    def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph):
         self.name2func = name2func
         self.dag = dag
-        self.bounds = bounds
-
-        assert bounds.shape[0] == 2
 
     def eval_sub(self, name: str, x: Float[Tensor, "n d"]) -> Float[Tensor, "n d2"]:
         return self.name2func[name].func(x)
@@ -116,3 +114,15 @@ class DAGFunction:
 
     def __call__(self, x: Float[Tensor, "n_d"]) -> Float[Tensor, "n 1"]:
         return self.eval(x)[self.get_output_node()]
+
+
+class ObjectiveSense(Enum):
+    MINIMIZE = 1
+    MAXIMIZE = -1
+
+
+@dataclass
+class Problem:
+    obj: DAGFunction
+    sense: ObjectiveSense
+    bounds: Float[Tensor, "2 d"]
