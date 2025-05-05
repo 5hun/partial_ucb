@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import logging
 
 from jaxtyping import Float
 import torch
@@ -106,12 +107,19 @@ class DAGUCB:
 
 
 class PartialUCB(QueryAlgorithm):
-    def __init__(self, problem: Problem, alpha: float, train_yvar: float = 1e-5):
+    def __init__(
+        self,
+        problem: Problem,
+        alpha: float,
+        logger: logging.Logger,
+        train_yvar: float = 1e-5,
+    ):
         self.problem = problem
         self.fun = problem.obj
         self.alpha = alpha
         self.train_yvar = train_yvar
         self.previous_sols = None
+        self.logger = logger
 
     def _optimize_dagucb(
         self, models: dict[str, botorch.models.SingleTaskGP]
@@ -123,7 +131,7 @@ class PartialUCB(QueryAlgorithm):
             num_initial_samples=100,
             sense=self.problem.sense,
         )
-        print(f"{res=}")
+        self.logger.debug(f"Optimization result: {res}")
         assert res.success
         x_org = torch.tensor(res.x).reshape(1, -1)
         x = x_org[:, : self.problem.bounds.shape[1]]
@@ -137,7 +145,7 @@ class PartialUCB(QueryAlgorithm):
             for nm, (x, y) in data.items()
         }
         result, _noise, _result_fval = self._optimize_dagucb(mods)
-        print(f"Optimize DAGUCB result: {result=}")
+        self.logger.debug(f"Optimize DAGUCB result: {result=}")
 
         name2func = self.fun.name2func.copy()
         for nm in mods:

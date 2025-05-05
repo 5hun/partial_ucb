@@ -4,6 +4,8 @@ import random
 import tomllib as tml
 import shutil
 import json
+import logging
+import uuid
 
 import numpy as np
 import torch
@@ -25,6 +27,40 @@ def set_random_seed(seed: int):
     torch.manual_seed(seed)
 
 
+def setup_logging(output_dir: Path, log_level: str):
+    """Set up logging configuration."""
+    log_file = output_dir / "log.txt"
+
+    # Convert string log level to logging constant
+    numeric_level = getattr(logging, log_level.upper())
+
+    # Configure logging: clear file if it exists, then set up handler
+    if log_file.exists():
+        log_file.unlink()
+
+    # Create logger
+    logger_name = f"pucb.run.{output_dir.name}.{uuid.uuid4()}"
+    logger = logging.getLogger(logger_name)
+    logger.setLevel(numeric_level)
+
+    # Remove any existing handlers
+    if logger.handlers:
+        logger.handlers = []
+
+    # Add file handler
+    file_handler = logging.FileHandler(log_file)
+    formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Prevent propagation to root logger
+    logger.propagate = False
+
+    logger.debug(f"Logging initialized at level {log_level}")
+
+    return logger
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=str)
@@ -36,25 +72,37 @@ if __name__ == "__main__":
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    # Set up logging
+    log_level = config.get("log_level", "INFO")
+    logger = setup_logging(output_dir, log_level)
+
     shutil.copy(args.config, output_dir / "config.toml")
+    logger.debug(f"Config file copied to {output_dir / 'config.toml'}")
 
     set_random_seed(config["seed"])
+    logger.debug(f"Random seed set to {config['seed']}")
 
     method_name = config["method"]
     method_config = config["method_config"]
+    logger.debug(f"Method: {method_name}, Config: {method_config}")
 
     function_name = config["function"]
     function_config = config["function_config"]
+    logger.debug(f"Function: {function_name}, Config: {function_config}")
+
     problem = FUNCTIONS[function_name](**function_config)
 
     assert method_name == "partial-ucb", "Currently only partial-ucb is supported"
 
-    method = query_algorithm.PartialUCB(problem=problem, **method_config)
+    method = query_algorithm.PartialUCB(problem=problem, logger=logger, **method_config)
+    logger.debug("Method initialized")
 
     # Get initial samples
     initial_samples = util.uniform_sampling(
         config["num_initial_samples"], problem.bounds
     )
+    logger.debug(f"Generated {config['num_initial_samples']} initial samples")
+
     initial_result = problem.obj.eval(initial_samples)
     data = {}
     for nm, func in problem.obj.name2func.items():
@@ -64,6 +112,7 @@ if __name__ == "__main__":
         assert tmp_input.shape == (initial_samples.shape[0], func.in_ndim)
         assert initial_result[nm].shape == (initial_samples.shape[0], func.out_ndim)
         data[nm] = (tmp_input, initial_result[nm])
+    logger.debug(f"Initial data collected for {list(data.keys())}")
 
     sol, est_val = method.get_solution(data)
     real_res = problem.obj.eval(sol)
@@ -83,9 +132,11 @@ if __name__ == "__main__":
         },
         "iter": [],
     }
+    logger.debug("Initial results computed")
 
     with open(output_dir / "results_itermediate.json", "w") as fout:
         json.dump(results, fout, indent=4)
+    logger.debug("Initial results saved to intermediate file")
 
     num_iter = config["num_iter"]
     for i in tqdm(range(num_iter), desc="Iterations"):
@@ -97,6 +148,9 @@ if __name__ == "__main__":
         data[query.query_function] = (
             torch.cat((data_input, query.query_input), dim=0),
             torch.cat((data_output, res), dim=0),
+        )
+        logger.debug(
+            f"Iteration {i + 1}: Data updated for function {query.query_function}"
         )
 
         new_sol, new_est = method.get_solution(data)
@@ -116,9 +170,12 @@ if __name__ == "__main__":
                 },
             }
         )
+        logger.debug(f"Iteration {i + 1}: Results updated")
 
         with open(output_dir / "results_itermediate.json", "w") as fout:
             json.dump(results, fout, indent=4)
+        logger.debug(f"Iteration {i + 1}: Results saved to intermediate file")
 
     with open(output_dir / "results.json", "w") as fout:
         json.dump(results, fout, indent=4)
+    logger.debug("Final results saved")

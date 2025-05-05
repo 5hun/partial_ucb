@@ -1,6 +1,7 @@
 output_dir = "output/ackley"
 seed = 0
 function = "ackley"
+log_level = "DEBUG"          # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 method = "partial-ucb"
 
