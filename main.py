@@ -7,6 +7,7 @@ import json
 
 import numpy as np
 import torch
+from tqdm import tqdm
 
 import util
 import functions
@@ -87,8 +88,7 @@ if __name__ == "__main__":
         json.dump(results, fout, indent=4)
 
     num_iter = config["num_iter"]
-    for i in range(num_iter):
-        print(f"Iteration {i + 1}/{num_iter}")
+    for i in tqdm(range(num_iter), desc="Iterations"):
         query = method.step(data)
         res = problem.obj.eval_sub(query.query_function, query.query_input)
 

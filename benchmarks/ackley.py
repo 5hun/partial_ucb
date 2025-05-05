@@ -33,8 +33,10 @@ def ackley_f1(x: Tensor) -> Tensor:
 
 def get_ackley(ndim: int) -> Problem:
     name2func = {
-        "f1": Function(func=ackley_f1, is_known=False, in_ndim=ndim, out_ndim=1),
-        "f2": Function(func=ackley_f2, is_known=False, in_ndim=1, out_ndim=1),
+        "f1": Function(
+            func=ackley_f1, is_known=False, in_ndim=ndim, out_ndim=1, cost=1.0
+        ),
+        "f2": Function(func=ackley_f2, is_known=False, in_ndim=1, out_ndim=1, cost=1.0),
     }
 
     dag = nx.DiGraph()

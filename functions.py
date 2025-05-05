@@ -15,8 +15,18 @@ class Function:
     func: Callable[[Tensor], Tensor]
     in_ndim: int
     out_ndim: int
+    cost: None | float = None
 
     # TODO: Allow func can be None for unknown functions
+
+    def __post_init__(self):
+        # Cost must be positive
+        if self.cost is not None and self.cost <= 0:
+            raise ValueError("cost should be positive")
+
+        # cost of known function should be None
+        if self.is_known and self.cost is not None:
+            raise ValueError("cost of known function should be None")
 
 
 class DAGFunction:

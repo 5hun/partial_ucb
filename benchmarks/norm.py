@@ -11,6 +11,7 @@ def get_norm(ndim: int, p: int) -> Problem:
             is_known=False,
             in_ndim=ndim,
             out_ndim=1,
+            cost=1.0,
         ),
     }
     dag = nx.DiGraph()
