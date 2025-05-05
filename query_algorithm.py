@@ -199,7 +199,7 @@ class PartialUCB(PartialQueryAlgorithm):
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
-            cov = mods[nm].posterior(tmp_input).covariance_matrix
+            cov = mods[nm].posterior(tmp_input).covariance_matrix  # type: ignore
             r = (tmp_grad @ (cov @ tmp_grad)).item() / func.cost
             assert r >= 0
             if r > best_r:
