@@ -10,6 +10,7 @@ import uuid
 import numpy as np
 import torch
 from tqdm import tqdm
+import tomli_w
 
 import util
 import functions
@@ -74,6 +75,8 @@ def main_loop_partial(
     config: dict,
     logger: logging.Logger,
 ):
+    output_dir = Path(config["output_dir"])
+
     # Get initial samples
     initial_samples = util.uniform_sampling(
         config["num_initial_samples"], problem.bounds
@@ -130,19 +133,21 @@ def main_loop_partial(
         )
 
         new_sol, new_est = method.get_solution(data)
-
         real_val = problem.obj(new_sol).item()
+
+        query_info = {
+            "function": "__full__",
+            "input": query.query_input.tolist()[0],
+        }
+        if "r" in query.info:
+            query_info["acquisition_value"] = query.info["r"]
         results["iter"].append(
             {
                 "iter": i + 1,
                 "estimated_solution": new_sol.tolist()[0],
                 "estimated_objective": new_est,
                 "true_objective": real_val,
-                "query": {
-                    "function": query.query_function,
-                    "input": query.query_input.tolist()[0],
-                    "acquisition_value": query.info["r"],
-                },
+                "query": query_info,
             }
         )
         logger.debug(f"Iteration {i + 1}: Results updated")
@@ -162,6 +167,7 @@ def main_loop_full(
     config: dict,
     logger: logging.Logger,
 ):
+    output_dir = Path(config["output_dir"])
     # Get initial samples
     train_X = util.uniform_sampling(config["num_initial_samples"], problem.bounds)
     logger.debug(f"Generated {config['num_initial_samples']} initial samples")
@@ -203,17 +209,19 @@ def main_loop_full(
         new_sol, new_est = method.get_solution(train_X, train_Y)
         real_val = problem.obj(new_sol).item()
 
+        query_info = {
+            "function": "__full__",
+            "input": query.query_input.tolist()[0],
+        }
+        if "r" in query.info:
+            query_info["acquisition_value"] = query.info["r"]
         results["iter"].append(
             {
                 "iter": i + 1,
                 "estimated_solution": new_sol.tolist()[0],
                 "estimated_objective": new_est,
                 "true_objective": real_val,
-                "query": {
-                    "function": "__full__",
-                    "input": query.query_input.tolist()[0],
-                    "acquisition_value": query.info["r"],
-                },
+                "query": query_info,
             }
         )
         logger.debug(f"Iteration {i + 1}: Results updated")
@@ -227,14 +235,7 @@ def main_loop_full(
     logger.debug("Final results saved")
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
-    parser.add_argument("config", type=str)
-    args = parser.parse_args()
-
-    with open(args.config, "rb") as fin:
-        config = tml.load(fin)
-
+def main(config: dict):
     output_dir = Path(config["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -242,7 +243,8 @@ if __name__ == "__main__":
     log_level = config.get("log_level", "INFO")
     logger = setup_logging(output_dir, log_level)
 
-    shutil.copy(args.config, output_dir / "config.toml")
+    with open(output_dir / "config.toml", "wb") as fout:
+        tomli_w.dump(config, fout)
     logger.debug(f"Config file copied to {output_dir / 'config.toml'}")
 
     set_random_seed(config["seed"])
@@ -260,7 +262,6 @@ if __name__ == "__main__":
 
     assert method_name in METHODS, f"Method {method_name} is not supported"
 
-    # method = query_algorithm.PartialUCB(problem=problem, logger=logger, **method_config)
     method: (
         query_algorithm.PartialQueryAlgorithm | query_algorithm.FullQueryAlgorithm
     ) = METHODS[method_name](problem=problem, logger=logger, **method_config)
@@ -271,3 +272,14 @@ if __name__ == "__main__":
     else:
         assert isinstance(method, query_algorithm.FullQueryAlgorithm)
         main_loop_full(method, problem, config, logger)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("config", type=str)
+    args = parser.parse_args()
+
+    with open(args.config, "rb") as fin:
+        config = tml.load(fin)
+
+    main(config)

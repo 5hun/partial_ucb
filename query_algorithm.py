@@ -253,7 +253,7 @@ class PartialUCB(PartialQueryAlgorithm):
 
 
 class Random(FullQueryAlgorithm):
-    def __init__(self, problem: Problem, _logger: logging.Logger):
+    def __init__(self, problem: Problem, logger: logging.Logger):
         self.problem = problem
 
     def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
