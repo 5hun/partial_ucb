@@ -92,8 +92,7 @@ def main_loop_partial(
     logger.debug(f"Initial data collected for {list(data.keys())}")
 
     sol, est_val = method.get_solution(data)
-    real_res = problem.obj.eval(sol)
-    real_val = real_res[problem.obj.get_output_node()].item()
+    real_val = problem.obj(sol).item()
     results = {
         "init": {
             "initial_samples": {
@@ -132,8 +131,7 @@ def main_loop_partial(
 
         new_sol, new_est = method.get_solution(data)
 
-        real_res = problem.obj.eval(new_sol)
-        real_val = real_res[problem.obj.get_output_node()].item()
+        real_val = problem.obj(new_sol).item()
         results["iter"].append(
             {
                 "iter": i + 1,
@@ -172,8 +170,7 @@ def main_loop_full(
 
     sol, est_val = method.get_solution(train_X, train_Y)
 
-    real_res = problem.obj.eval(sol)
-    real_val = real_res[problem.obj.get_output_node()].item()
+    real_val = problem.obj(sol).item()
     results = {
         "init": {
             "initial_samples": {
@@ -204,7 +201,7 @@ def main_loop_full(
         logger.debug(f"Iteration {i + 1}: Data updated")
 
         new_sol, new_est = method.get_solution(train_X, train_Y)
-        real_res = problem.obj(new_sol)
+        real_val = problem.obj(new_sol).item()
 
         results["iter"].append(
             {
