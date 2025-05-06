@@ -15,7 +15,7 @@ import main
 
 base_output_dir = Path("output/experiments")
 
-num_parallel = 8
+num_parallel = 1
 
 base_settings = {
     "log_level": "DEBUG",

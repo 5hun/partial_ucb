@@ -135,6 +135,7 @@ class PartialUCB(PartialQueryAlgorithm):
         self.train_yvar = train_yvar
         self.previous_sols = None
         self.logger = logger
+        self.mods = None
 
     def _optimize_dagucb(
         self, models: dict[str, botorch.models.SingleTaskGP]
@@ -155,19 +156,26 @@ class PartialUCB(PartialQueryAlgorithm):
         return x, noise, fval
 
     def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> PartialQueryResponse:
-        mods = {
-            nm: gp.get_model(x, y, train_yvar=self.train_yvar)
+        self.mods = {
+            nm: gp.get_model(
+                x,
+                y,
+                train_yvar=self.train_yvar,
+                state_dict=(
+                    self.mods[nm].state_dict() if self.mods is not None else None
+                ),
+            )
             for nm, (x, y) in data.items()
         }
-        result, _noise, _result_fval = self._optimize_dagucb(mods)
+        result, _noise, _result_fval = self._optimize_dagucb(self.mods)
         self.logger.debug(f"Optimize DAGUCB result: {result=}")
 
         name2func = self.fun.name2func.copy()
-        for nm in mods:
+        for nm in self.mods:
             func = name2func[nm]
             name2func[nm] = Function(
                 is_known=True,
-                func=gp.ExpectationFunction(mods[nm]),
+                func=gp.ExpectationFunction(self.mods[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
@@ -199,7 +207,7 @@ class PartialUCB(PartialQueryAlgorithm):
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
-            cov = mods[nm].posterior(tmp_input).covariance_matrix  # type: ignore
+            cov = self.mods[nm].posterior(tmp_input).covariance_matrix  # type: ignore
             r = (tmp_grad @ (cov @ tmp_grad)).item() / func.cost
             assert r >= 0
             if r > best_r:
@@ -213,16 +221,23 @@ class PartialUCB(PartialQueryAlgorithm):
     def get_solution(
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
-        mods = {
-            nm: gp.get_model(x, y, train_yvar=self.train_yvar)
+        self.mods = {
+            nm: gp.get_model(
+                x,
+                y,
+                train_yvar=self.train_yvar,
+                state_dict=(
+                    self.mods[nm].state_dict() if self.mods is not None else None
+                ),
+            )
             for nm, (x, y) in data.items()
         }
         name2func = self.fun.name2func.copy()
-        for nm in mods:
+        for nm in self.mods:
             func = name2func[nm]
             name2func[nm] = Function(
                 is_known=True,
-                func=gp.ExpectationFunction(mods[nm]),
+                func=gp.ExpectationFunction(self.mods[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )

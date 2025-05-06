@@ -35,7 +35,10 @@ def ucb(mod: SingleTaskGP, x: Tensor, alpha: Tensor) -> Tensor:
 
 
 def get_model(
-    train_x: Float[Tensor, "n d"], train_y: Float[Tensor, "n 1"], train_yvar: float
+    train_x: Float[Tensor, "n d"],
+    train_y: Float[Tensor, "n 1"],
+    train_yvar: float,
+    state_dict: None | dict = None,
 ) -> SingleTaskGP:
     r"""
     Fit a Gaussian process model to the data.
@@ -56,6 +59,10 @@ def get_model(
         outcome_transform=Standardize(m=1),
     ).to(train_x)
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
+
+    if state_dict is not None:
+        model.load_state_dict(state_dict)
+
     fit_gpytorch_mll(mll)
     return model
 
