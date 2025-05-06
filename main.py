@@ -2,10 +2,10 @@ import argparse
 from pathlib import Path
 import random
 import tomllib as tml
-import shutil
 import json
 import logging
 import uuid
+import time
 
 import numpy as np
 import torch
@@ -84,6 +84,7 @@ def main_loop_partial(
     logger.debug(f"Generated {config['num_initial_samples']} initial samples")
 
     initial_result = problem.obj.eval(initial_samples)
+    initial_cost = 0.0
     data = {}
     for nm, func in problem.obj.name2func.items():
         if func.is_known:
@@ -92,9 +93,12 @@ def main_loop_partial(
         assert tmp_input.shape == (initial_samples.shape[0], func.in_ndim)
         assert initial_result[nm].shape == (initial_samples.shape[0], func.out_ndim)
         data[nm] = (tmp_input, initial_result[nm])
+        initial_cost += problem.obj.get_cost(nm) * initial_samples.shape[0]
     logger.debug(f"Initial data collected for {list(data.keys())}")
 
+    t1 = time.time()
     sol, est_val = method.get_solution(data)
+    get_solution_time = time.time() - t1
     real_val = problem.obj(sol).item()
     results = {
         "init": {
@@ -108,6 +112,8 @@ def main_loop_partial(
             "estimated_solution": sol.tolist()[0],
             "estimated_objective": est_val,
             "true_objective": real_val,
+            "initial_cost": initial_cost,
+            "get_solution_time": get_solution_time,
         },
         "iter": [],
     }
@@ -119,7 +125,9 @@ def main_loop_partial(
 
     num_iter = config["num_iter"]
     for i in tqdm(range(num_iter), desc="Iterations"):
+        t1 = time.time()
         query = method.step(data)
+        get_query_time = time.time() - t1
         res = problem.obj.eval_sub(query.query_function, query.query_input)
 
         data_input = data[query.query_function][0]
@@ -128,11 +136,15 @@ def main_loop_partial(
             torch.cat((data_input, query.query_input), dim=0),
             torch.cat((data_output, res), dim=0),
         )
+        tmp_cost = problem.obj.get_cost(query.query_function)
+
         logger.debug(
             f"Iteration {i + 1}: Data updated for function {query.query_function}"
         )
 
+        t1 = time.time()
         new_sol, new_est = method.get_solution(data)
+        get_solution_time = time.time() - t1
         real_val = problem.obj(new_sol).item()
 
         query_info = {
@@ -148,6 +160,9 @@ def main_loop_partial(
                 "estimated_objective": new_est,
                 "true_objective": real_val,
                 "query": query_info,
+                "cost": tmp_cost,
+                "get_query_time": get_query_time,
+                "get_solution_time": get_solution_time,
             }
         )
         logger.debug(f"Iteration {i + 1}: Results updated")
@@ -174,7 +189,9 @@ def main_loop_full(
 
     train_Y = problem.obj(train_X)
 
+    t1 = time.time()
     sol, est_val = method.get_solution(train_X, train_Y)
+    get_solution_time = time.time() - t1
 
     real_val = problem.obj(sol).item()
     results = {
@@ -188,6 +205,8 @@ def main_loop_full(
             "estimated_solution": sol.tolist()[0],
             "estimated_objective": est_val,
             "true_objective": real_val,
+            "initial_cost": problem.obj.total_cost() * config["num_initial_samples"],
+            "get_solution_time": get_solution_time,
         },
         "iter": [],
     }
@@ -199,14 +218,18 @@ def main_loop_full(
 
     num_iter = config["num_iter"]
     for i in tqdm(range(num_iter), desc="Iterations"):
+        t1 = time.time()
         query = method.step(train_X, train_Y)
+        get_query_time = time.time() - t1
         res = problem.obj(query.query_input)
 
         train_X = torch.cat((train_X, query.query_input), dim=0)
         train_Y = torch.cat((train_Y, res), dim=0)
         logger.debug(f"Iteration {i + 1}: Data updated")
 
+        t1 = time.time()
         new_sol, new_est = method.get_solution(train_X, train_Y)
+        get_solution_time = time.time() - t1
         real_val = problem.obj(new_sol).item()
 
         query_info = {
@@ -222,6 +245,9 @@ def main_loop_full(
                 "estimated_objective": new_est,
                 "true_objective": real_val,
                 "query": query_info,
+                "cost": problem.obj.total_cost(),
+                "get_query_time": get_query_time,
+                "get_solution_time": get_solution_time,
             }
         )
         logger.debug(f"Iteration {i + 1}: Results updated")

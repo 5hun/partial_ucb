@@ -1,11 +1,12 @@
 import itertools as it
 from pathlib import Path
+import json
 
 import tomli_w
 from tqdm import tqdm
-
-import main
-
+import polars as pl
+from matplotlib import pyplot as plt
+import seaborn as sns
 
 base_output_dir = Path("output")
 
@@ -30,31 +31,19 @@ methods = {
     "full-logei": {"method": "full-logei", "method_config": {}},
 }
 
-other_settings = {
-    "seed_0": {
-        "seed": 0,
-    },
-    "seed_1": {
-        "seed": 1,
-    },
-    "seed_2": {
-        "seed": 2,
-    },
-}
 
-for p_key, m_key, o_key in tqdm(
-    it.product(problems.keys(), methods.keys(), other_settings.keys())
-):
+df = []
+
+for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range(3))):
     p_stg = problems[p_key]
     m_stg = methods[m_key]
-    o_stg = other_settings[o_key]
 
     tmp_stg = base_settings.copy()
     tmp_stg.update(p_stg)
     tmp_stg.update(m_stg)
-    tmp_stg.update(o_stg)
+    tmp_stg.update({"seed": seed})
 
-    tmp_output_dir = base_output_dir / p_key / m_key / o_key
+    tmp_output_dir = base_output_dir / p_key / m_key / f"seed_{seed}"
 
     tmp_stg["output_dir"] = str(tmp_output_dir)
 
@@ -65,8 +54,105 @@ for p_key, m_key, o_key in tqdm(
         tomli_w.dump(tmp_stg, fout)
 
     result_file = tmp_output_dir / "results.json"
-    if result_file.exists():
-        print(f"Result file {result_file} already exists. Skipping.")
-        continue
+    if not result_file.exists():
+        import main
 
-    main.main(tmp_stg)
+        main.main(tmp_stg)
+    else:
+        print(f"Result file {result_file} already exists. Skipping.")
+
+    with open(result_file, "r") as fin:
+        results = json.load(fin)
+
+    init_res = results["init"]
+    df.append(
+        {
+            "problem": p_key,
+            "method": m_key,
+            "seed": seed,
+            "iter": 0,
+            "cost": init_res["initial_cost"],
+            "obj": init_res["true_objective"],
+        }
+    )
+
+    for i, res in enumerate(results["iter"]):
+        df.append(
+            {
+                "problem": p_key,
+                "method": m_key,
+                "seed": seed,
+                "iter": i + 1,
+                "cost": res["cost"],
+                "obj": res["true_objective"],
+            }
+        )
+
+df = pl.DataFrame(df)
+df.write_csv(base_output_dir / "summary.csv")
+
+plot_dir = base_output_dir / "plots"
+plot_dir.mkdir(parents=True, exist_ok=True)
+df = df.with_columns(
+    pl.col("cost")
+    .cum_sum()
+    .over(["problem", "method", "seed"])
+    .alias("cumulative_cost")
+)
+for p in sorted(df["problem"].unique()):
+    sub_df = df.filter(pl.col("problem") == p)
+    # plot cost vs obj, coloring by method
+    sns.relplot(
+        data=sub_df.to_pandas(),
+        x="cumulative_cost",
+        y="obj",
+        hue="method",
+        kind="line",
+        # height=5,
+        aspect=2,
+        # estimator=None,
+        # units="seed"
+    )
+    plt.title(f"Problem {p}")
+    plt.xlabel("Cumulative Cost")
+    plt.ylabel("Objective Value")
+    plt.legend(title="Method")
+    plt.savefig(plot_dir / f"{p}_cost_vs_obj.png")
+    plt.close()
+
+    # plot Iter vs obj, coloring by method
+    sns.relplot(
+        data=sub_df.to_pandas(),
+        x="iter",
+        y="obj",
+        hue="method",
+        kind="line",
+        # height=5,
+        aspect=2,
+        # estimator=None,
+        # units="seed"
+    )
+    plt.title(f"Problem {p}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Objective Value")
+    plt.legend(title="Method")
+    plt.savefig(plot_dir / f"{p}_iter_vs_obj.png")
+    plt.close()
+    # plot Iter vs cost, coloring by method
+    sns.relplot(
+        data=sub_df.to_pandas(),
+        x="iter",
+        y="cumulative_cost",
+        hue="method",
+        kind="line",
+        # height=5,
+        aspect=2,
+        # estimator=None,
+        # units="seed"
+    )
+    plt.title(f"Problem {p}")
+    plt.xlabel("Iteration")
+    plt.ylabel("Cumulative Cost")
+    plt.tight_layout()
+    plt.savefig(plot_dir / f"{p}_iter_vs_cost.png")
+    plt.close()

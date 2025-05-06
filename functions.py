@@ -125,6 +125,19 @@ class DAGFunction:
     def __call__(self, x: Float[Tensor, "n_d"]) -> Float[Tensor, "n 1"]:
         return self.eval(x)[self.get_output_node()]
 
+    def get_cost(self, name: str) -> float:
+        func = self.name2func[name]
+        return getattr(func, "cost", 0.0)
+
+    def total_cost(self) -> float:
+        total_cost = 0.0
+        for node in self.dag.nodes:
+            func_name = self.dag.nodes[node]["func"]
+            func = self.name2func[func_name]
+            if func.cost is not None:
+                total_cost += func.cost
+        return total_cost
+
 
 class ObjectiveSense(Enum):
     MINIMIZE = 1
