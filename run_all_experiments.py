@@ -13,59 +13,13 @@ import seaborn as sns
 import main
 
 
-base_output_dir = Path("output/experiments")
-
-num_parallel = 1
-
-base_settings = {
-    "log_level": "DEBUG",
-    "num_iter": 20,
-}
-
-problems = {
-    # "ackley_2d": {
-    #     "function": "ackley",
-    #     "function_config": {"ndim": 2, "cost1": 1, "cost2": 1},
-    #     "num_initial_samples": 5,
-    # },
-    # "ackley_6d_1_1": {
-    #     "function": "ackley",
-    #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
-    #     "num_initial_samples": 13,
-    # },
-    # "ackley_6d_1_9": {
-    #     "function": "ackley",
-    #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
-    #     "num_initial_samples": 13,
-    # },
-    "ackley_6d_1_49": {
-        "function": "ackley",
-        "function_config": {"ndim": 6, "cost1": 1, "cost2": 49},
-        "num_initial_samples": 13,
-    },
-    # "pharma": {
-    #     "function": "pharma",
-    #     "function_config": {},
-    #     "num_initial_samples": 9,
-    # },
-    # "norm_2d": {
-    #     "function": "norm",
-    #     "function_config": {"ndim": 2, "p": 2},
-    #     "num_initial_samples": 5,
-    # },
-}
-
-methods = {
-    # "random": {"method": "random", "method_config": {}},
-    "partial-ucb_1": {"method": "partial-ucb", "method_config": {"alpha": 1.0}},
-    # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
-    "full-ucb_1": {"method": "full-ucb", "method_config": {"alpha": 1.0}},
-    # "full-ucb_2": {"method": "full-ucb", "method_config": {"alpha": 2.0}},
-    "full-logei": {"method": "full-logei", "method_config": {}},
-}
-
-
-def process_experiment(base_settings, problems, methods, base_output_dir, combo):
+def process_experiment(
+    base_settings: dict[str, str | int | float],
+    problems: dict[str, dict[str, str | int | float]],
+    methods: dict[str, dict[str, str | int | float]],
+    base_output_dir: Path,
+    combo: tuple[str, str, int],
+) -> list[dict[str, str | int | float]]:
     p_key, m_key, seed = combo
     p_stg = problems[p_key]
     m_stg = methods[m_key]
@@ -120,7 +74,7 @@ def process_experiment(base_settings, problems, methods, base_output_dir, combo)
     return exp_results
 
 
-def create_all_plots(df, plot_dir):
+def create_all_plots(df: pl.DataFrame, plot_dir: Path) -> None:
     """Create all plots for the experiment results"""
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -214,6 +168,57 @@ def create_all_plots(df, plot_dir):
 
 # Set up multiprocessing pool and run experiments in parallel
 if __name__ == "__main__":
+    base_output_dir = Path("output/experiments")
+
+    num_parallel = 1
+
+    base_settings = {
+        "log_level": "DEBUG",
+        "num_iter": 20,
+    }
+
+    problems = {
+        # "ackley_2d": {
+        #     "function": "ackley",
+        #     "function_config": {"ndim": 2, "cost1": 1, "cost2": 1},
+        #     "num_initial_samples": 5,
+        # },
+        # "ackley_6d_1_1": {
+        #     "function": "ackley",
+        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
+        #     "num_initial_samples": 13,
+        # },
+        # "ackley_6d_1_9": {
+        #     "function": "ackley",
+        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
+        #     "num_initial_samples": 13,
+        # },
+        "ackley_6d_1_49": {
+            "function": "ackley",
+            "function_config": {"ndim": 6, "cost1": 1, "cost2": 49},
+            "num_initial_samples": 13,
+        },
+        # "pharma": {
+        #     "function": "pharma",
+        #     "function_config": {},
+        #     "num_initial_samples": 9,
+        # },
+        # "norm_2d": {
+        #     "function": "norm",
+        #     "function_config": {"ndim": 2, "p": 2},
+        #     "num_initial_samples": 5,
+        # },
+    }
+
+    methods = {
+        # "random": {"method": "random", "method_config": {}},
+        "partial-ucb_1": {"method": "partial-ucb", "method_config": {"alpha": 1.0}},
+        # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
+        "full-ucb_1": {"method": "full-ucb", "method_config": {"alpha": 1.0}},
+        # "full-ucb_2": {"method": "full-ucb", "method_config": {"alpha": 2.0}},
+        "full-logei": {"method": "full-logei", "method_config": {}},
+    }
+
     # Create list of all parameter combinations
     param_combos = list(it.product(problems.keys(), methods.keys(), range(30)))
 
