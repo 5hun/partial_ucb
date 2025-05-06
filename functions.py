@@ -15,7 +15,7 @@ class Function:
     func: Callable[[Tensor], Tensor]
     in_ndim: int
     out_ndim: int
-    cost: None | float = None
+    cost: None | int = None
 
     # TODO: Allow func can be None for unknown functions
 
@@ -66,7 +66,7 @@ class DAGFunction:
             if (
                 len(inputs_concat) == 0
                 or inputs_concat[-1][0] != nm
-                or inputs_concat[-1][1] + 1 < x_idx
+                or inputs_concat[-1][2] < x_idx
             ):
                 inputs_concat.append((nm, x_idx, x_idx + 1))
             else:
@@ -125,12 +125,12 @@ class DAGFunction:
     def __call__(self, x: Float[Tensor, "n_d"]) -> Float[Tensor, "n 1"]:
         return self.eval(x)[self.get_output_node()]
 
-    def get_cost(self, name: str) -> float:
+    def get_cost(self, name: str) -> int:
         func = self.name2func[name]
-        return getattr(func, "cost", 0.0)
+        return getattr(func, "cost", 0)
 
-    def total_cost(self) -> float:
-        total_cost = 0.0
+    def total_cost(self) -> int:
+        total_cost = 0
         for node in self.dag.nodes:
             func_name = self.dag.nodes[node]["func"]
             func = self.name2func[func_name]

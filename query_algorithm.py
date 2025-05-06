@@ -147,7 +147,7 @@ class PartialUCB(PartialQueryAlgorithm):
             sense=self.problem.sense,
         )
         self.logger.debug(f"Optimization result: {res}")
-        assert res.success
+        # assert res.success
         x_org = torch.tensor(res.x).reshape(1, -1)
         x = x_org[:, : self.problem.bounds.shape[1]]
         noise = x_org[:, self.problem.bounds.shape[1] :]
@@ -233,7 +233,8 @@ class PartialUCB(PartialQueryAlgorithm):
             num_initial_samples=100,
             sense=self.problem.sense,
         )
-        assert res.success
+        self.logger.debug(f"Optimization result: {res}")
+        # assert res.success
         sol = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun
 

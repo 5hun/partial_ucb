@@ -1,6 +1,8 @@
 import itertools as it
 from pathlib import Path
 import json
+import multiprocessing as mp
+from functools import partial
 
 import tomli_w
 from tqdm import tqdm
@@ -8,33 +10,63 @@ import polars as pl
 from matplotlib import pyplot as plt
 import seaborn as sns
 
-base_output_dir = Path("output")
+import main
+
+
+base_output_dir = Path("output/experiments")
+
+num_parallel = 8
 
 base_settings = {
     "log_level": "DEBUG",
-    "num_initial_samples": 5,
     "num_iter": 20,
 }
 
 problems = {
-    "ackley_2d": {"function": "ackley", "function_config": {"ndim": 2}},
-    "ackley_6d": {"function": "ackley", "function_config": {"ndim": 6}},
-    "norm_2d": {"function": "norm", "function_config": {"ndim": 2, "p": 2}},
+    # "ackley_2d": {
+    #     "function": "ackley",
+    #     "function_config": {"ndim": 2, "cost1": 1, "cost2": 1},
+    #     "num_initial_samples": 5,
+    # },
+    # "ackley_6d_1_1": {
+    #     "function": "ackley",
+    #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
+    #     "num_initial_samples": 13,
+    # },
+    # "ackley_6d_1_9": {
+    #     "function": "ackley",
+    #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
+    #     "num_initial_samples": 13,
+    # },
+    "ackley_6d_1_49": {
+        "function": "ackley",
+        "function_config": {"ndim": 6, "cost1": 1, "cost2": 49},
+        "num_initial_samples": 13,
+    },
+    # "pharma": {
+    #     "function": "pharma",
+    #     "function_config": {},
+    #     "num_initial_samples": 9,
+    # },
+    # "norm_2d": {
+    #     "function": "norm",
+    #     "function_config": {"ndim": 2, "p": 2},
+    #     "num_initial_samples": 5,
+    # },
 }
 
 methods = {
-    "random": {"method": "random", "method_config": {}},
+    # "random": {"method": "random", "method_config": {}},
     "partial-ucb_1": {"method": "partial-ucb", "method_config": {"alpha": 1.0}},
-    "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
+    # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
     "full-ucb_1": {"method": "full-ucb", "method_config": {"alpha": 1.0}},
-    "full-ucb_2": {"method": "full-ucb", "method_config": {"alpha": 2.0}},
+    # "full-ucb_2": {"method": "full-ucb", "method_config": {"alpha": 2.0}},
     "full-logei": {"method": "full-logei", "method_config": {}},
 }
 
 
-df = []
-
-for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range(3))):
+def process_experiment(base_settings, problems, methods, base_output_dir, combo):
+    p_key, m_key, seed = combo
     p_stg = problems[p_key]
     m_stg = methods[m_key]
 
@@ -44,9 +76,7 @@ for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range
     tmp_stg.update({"seed": seed})
 
     tmp_output_dir = base_output_dir / p_key / m_key / f"seed_{seed}"
-
     tmp_stg["output_dir"] = str(tmp_output_dir)
-
     tmp_output_dir.mkdir(parents=True, exist_ok=True)
 
     stg_file = tmp_output_dir / "settings.toml"
@@ -55,8 +85,6 @@ for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range
 
     result_file = tmp_output_dir / "results.json"
     if not result_file.exists():
-        import main
-
         main.main(tmp_stg)
     else:
         print(f"Result file {result_file} already exists. Skipping.")
@@ -64,8 +92,9 @@ for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range
     with open(result_file, "r") as fin:
         results = json.load(fin)
 
+    exp_results = []
     init_res = results["init"]
-    df.append(
+    exp_results.append(
         {
             "problem": p_key,
             "method": m_key,
@@ -77,7 +106,7 @@ for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range
     )
 
     for i, res in enumerate(results["iter"]):
-        df.append(
+        exp_results.append(
             {
                 "problem": p_key,
                 "method": m_key,
@@ -88,71 +117,120 @@ for p_key, m_key, seed in tqdm(it.product(problems.keys(), methods.keys(), range
             }
         )
 
-df = pl.DataFrame(df)
-df.write_csv(base_output_dir / "summary.csv")
+    return exp_results
 
-plot_dir = base_output_dir / "plots"
-plot_dir.mkdir(parents=True, exist_ok=True)
-df = df.with_columns(
-    pl.col("cost")
-    .cum_sum()
-    .over(["problem", "method", "seed"])
-    .alias("cumulative_cost")
-)
-for p in sorted(df["problem"].unique()):
-    sub_df = df.filter(pl.col("problem") == p)
-    # plot cost vs obj, coloring by method
-    sns.relplot(
-        data=sub_df.to_pandas(),
-        x="cumulative_cost",
-        y="obj",
-        hue="method",
-        kind="line",
-        # height=5,
-        aspect=2,
-        # estimator=None,
-        # units="seed"
-    )
-    plt.title(f"Problem {p}")
-    plt.xlabel("Cumulative Cost")
-    plt.ylabel("Objective Value")
-    plt.legend(title="Method")
-    plt.savefig(plot_dir / f"{p}_cost_vs_obj.png")
-    plt.close()
 
-    # plot Iter vs obj, coloring by method
-    sns.relplot(
-        data=sub_df.to_pandas(),
-        x="iter",
-        y="obj",
-        hue="method",
-        kind="line",
-        # height=5,
-        aspect=2,
-        # estimator=None,
-        # units="seed"
+def create_all_plots(df, plot_dir):
+    """Create all plots for the experiment results"""
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    # Add cumulative cost column
+    df = df.with_columns(
+        pl.col("cost")
+        .cum_sum()
+        .over(["problem", "method", "seed"])
+        .alias("cumulative_cost")
+        .cast(pl.Int64)
     )
-    plt.title(f"Problem {p}")
-    plt.xlabel("Iteration")
-    plt.ylabel("Objective Value")
-    plt.legend(title="Method")
-    plt.savefig(plot_dir / f"{p}_iter_vs_obj.png")
-    plt.close()
-    # plot Iter vs cost, coloring by method
-    sns.relplot(
-        data=sub_df.to_pandas(),
-        x="iter",
-        y="cumulative_cost",
-        hue="method",
-        kind="line",
-        # height=5,
-        aspect=2,
-        # estimator=None,
-        # units="seed"
+
+    for p in tqdm(sorted(df["problem"].unique()), desc="Plotting"):
+        sub_df = df.filter(pl.col("problem") == p)
+
+        # Prepare data for cost vs obj plot
+        sub_df2 = sub_df.select(
+            pl.col("method"), pl.col("seed"), pl.col("cumulative_cost"), pl.col("obj")
+        )
+
+        df_ranges = (
+            sub_df2.group_by(["method", "seed"])
+            .agg(
+                [
+                    pl.min("cumulative_cost").alias("start"),
+                    (pl.max("cumulative_cost") + 1).alias("end"),
+                ]
+            )
+            .with_columns(pl.int_ranges("start", "end").alias("cumulative_cost"))
+            .explode("cumulative_cost")
+            .select("method", "seed", "cumulative_cost")
+        )
+
+        # Join and forward fill
+        filled_data = (
+            df_ranges.join(
+                sub_df2, on=["method", "seed", "cumulative_cost"], how="left"
+            )
+            .sort(["method", "seed", "cumulative_cost"])
+            .with_columns(pl.col("obj").forward_fill())
+        )
+
+        # Plot 1: cost vs obj
+        sns.relplot(
+            data=filled_data.to_pandas(),
+            x="cumulative_cost",
+            y="obj",
+            hue="method",
+            kind="line",
+            aspect=2,
+        )
+        plt.title(f"Problem {p}")
+        plt.xlabel("Cumulative Cost")
+        plt.ylabel("Objective Value")
+        plt.tight_layout()
+        plt.savefig(plot_dir / f"{p}_cost_vs_obj.png")
+        plt.close()
+
+        # Plot 2: iter vs obj
+        sns.relplot(
+            data=sub_df.to_pandas(),
+            x="iter",
+            y="obj",
+            hue="method",
+            kind="line",
+            aspect=2,
+        )
+        plt.title(f"Problem {p}")
+        plt.xlabel("Iteration")
+        plt.ylabel("Objective Value")
+        plt.tight_layout()
+        plt.savefig(plot_dir / f"{p}_iter_vs_obj.png")
+        plt.close()
+
+        # Plot 3: iter vs cost
+        sns.relplot(
+            data=sub_df.to_pandas(),
+            x="iter",
+            y="cumulative_cost",
+            hue="method",
+            kind="line",
+            aspect=2,
+        )
+        plt.title(f"Problem {p}")
+        plt.xlabel("Iteration")
+        plt.ylabel("Cumulative Cost")
+        plt.tight_layout()
+        plt.savefig(plot_dir / f"{p}_iter_vs_cost.png")
+        plt.close()
+
+
+# Set up multiprocessing pool and run experiments in parallel
+if __name__ == "__main__":
+    # Create list of all parameter combinations
+    param_combos = list(it.product(problems.keys(), methods.keys(), range(30)))
+
+    # Prepare worker function with fixed parameters
+    worker_func = partial(
+        process_experiment, base_settings, problems, methods, base_output_dir
     )
-    plt.title(f"Problem {p}")
-    plt.xlabel("Iteration")
-    plt.ylabel("Cumulative Cost")
-    plt.tight_layout()
-    plt.savefig(plot_dir / f"{p}_iter_vs_cost.png")
-    plt.close()
+
+    with mp.Pool(processes=num_parallel) as pool:
+        results = list(
+            tqdm(pool.imap(worker_func, param_combos), total=len(param_combos))
+        )
+
+    # Flatten results list
+    df = [item for sublist in results for item in sublist]
+
+    df = pl.DataFrame(df)
+    df.write_csv(base_output_dir / "summary.csv")
+
+    create_all_plots(df, base_output_dir / "plots")

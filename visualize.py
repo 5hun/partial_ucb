@@ -7,6 +7,31 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 
+def step_function_intepolate(
+    x: np.ndarray, y: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""
+    x = [1, 3, 7]
+    y = [0, 1, 2]
+    =>
+    x = [1, 2, 3, 4, 5, 6, 7]
+    y = [0, 0, 1, 1, 1, 1, 2]
+    """
+    x_exp = []
+    y_exp = []
+    for i in range(len(x) - 1):
+        x_exp.append(x[i])
+        y_exp.append(y[i])
+        x_diff = x[i + 1] - x[i]
+        if x_diff > 1:
+            for j in range(1, x_diff):
+                x_exp.append(x[i] + j)
+                y_exp.append(y[i])
+    x_exp.append(x[-1])
+    y_exp.append(y[-1])
+    return np.array(x_exp), np.array(y_exp)
+
+
 def plot_objective_values(result: dict, vis_dir: Path) -> None:
     obj_vals = np.array(
         [result["init"]["true_objective"]]
@@ -20,7 +45,14 @@ def plot_objective_values(result: dict, vis_dir: Path) -> None:
         [float("nan")] + [x["query"]["acquisition_value"] for x in result["iter"]]
     )
 
-    fig, axs = plt.subplots(3, 1, figsize=(10, 12))
+    costs = np.array(
+        [result["init"]["initial_cost"]] + [x["cost"] for x in result["iter"]]
+    )
+    cum_costs = np.cumsum(costs)
+    cum_costs2, obj_vals2 = step_function_intepolate(cum_costs, obj_vals)
+    _, est_vals2 = step_function_intepolate(cum_costs, est_vals)
+
+    fig, axs = plt.subplots(4, 1, figsize=(10, 12))
     axs[0].plot(obj_vals, label="True Objective")
     axs[0].plot(est_vals, label="Estimated Objective")
     axs[0].set_title("Objective Values")
@@ -28,17 +60,25 @@ def plot_objective_values(result: dict, vis_dir: Path) -> None:
     axs[0].set_ylabel("Objective Value")
     axs[0].legend()
 
-    axs[1].plot(obj_vals - est_vals, label="Error")
-    axs[1].set_title("Error")
-    axs[1].set_xlabel("Iteration")
-    axs[1].set_ylabel("Error")
+    # cum costs vs obj
+    axs[1].plot(cum_costs2, obj_vals2, label="True Objective")
+    axs[1].plot(cum_costs2, est_vals2, label="Estimated Objective")
+    axs[1].set_title("Cumulative Cost vs Objective Values")
+    axs[1].set_xlabel("Cumulative Cost")
+    axs[1].set_ylabel("Objective Value")
     axs[1].legend()
 
-    axs[2].plot(acq_vals, label="Acquisition Value")
-    axs[2].set_title("Acquisition Values")
+    axs[2].plot(obj_vals - est_vals, label="Error")
+    axs[2].set_title("Error")
     axs[2].set_xlabel("Iteration")
-    axs[2].set_ylabel("Acquisition Value")
+    axs[2].set_ylabel("Error")
     axs[2].legend()
+
+    axs[3].plot(acq_vals, label="Acquisition Value")
+    axs[3].set_title("Acquisition Values")
+    axs[3].set_xlabel("Iteration")
+    axs[3].set_ylabel("Acquisition Value")
+    axs[3].legend()
 
     plt.tight_layout()
     plt.savefig(vis_dir / "objective_values.png")
@@ -135,7 +175,12 @@ def visualize(config: dict) -> None:
 
     plot_objective_values(result, vis_dir)
     plot_query_inputs(result, vis_dir)
-    plot_proposed_solutions(result, vis_dir)
+    if len(result["init"]["estimated_solution"]) == 2:
+        plot_proposed_solutions(result, vis_dir)
+    else:
+        print(
+            f"Skipping proposed solutions plot because the solution dimension is {len(result['init']['estimated_solution'])}."
+        )
 
 
 if __name__ == "__main__":

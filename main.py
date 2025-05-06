@@ -16,9 +16,14 @@ import util
 import functions
 import benchmarks.ackley as ackley
 import benchmarks.norm as norm
+import benchmarks.pharma as pharma
 import query_algorithm
 
-FUNCTIONS = {"ackley": ackley.get_ackley, "norm": norm.get_norm}
+FUNCTIONS = {
+    "ackley": ackley.get_ackley,
+    "norm": norm.get_norm,
+    "pharma": pharma.get_pharma,
+}
 
 METHODS = {
     "partial-ucb": query_algorithm.PartialUCB,
@@ -84,7 +89,7 @@ def main_loop_partial(
     logger.debug(f"Generated {config['num_initial_samples']} initial samples")
 
     initial_result = problem.obj.eval(initial_samples)
-    initial_cost = 0.0
+    initial_cost = 0
     data = {}
     for nm, func in problem.obj.name2func.items():
         if func.is_known:
@@ -148,7 +153,7 @@ def main_loop_partial(
         real_val = problem.obj(new_sol).item()
 
         query_info = {
-            "function": "__full__",
+            "function": query.query_function,
             "input": query.query_input.tolist()[0],
         }
         if "r" in query.info:

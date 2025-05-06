@@ -1,7 +1,7 @@
 r"""
 Nonlinear transform of negative of the Ackley function.
 
-Reference:
+References:
     Appendix D.5. of Bayesian Optimization of Function Networks with Partial Evaluations
     https://proceedings.mlr.press/v235/buathong24a.html
 
@@ -31,12 +31,14 @@ def ackley_f1(x: Tensor) -> Tensor:
     return -original_ackley(20, 0.2, 2 * np.pi, x)
 
 
-def get_ackley(ndim: int) -> Problem:
+def get_ackley(ndim: int, cost1: int, cost2: int) -> Problem:
     name2func = {
         "f1": Function(
-            func=ackley_f1, is_known=False, in_ndim=ndim, out_ndim=1, cost=1.0
+            func=ackley_f1, is_known=False, in_ndim=ndim, out_ndim=1, cost=cost1
         ),
-        "f2": Function(func=ackley_f2, is_known=False, in_ndim=1, out_ndim=1, cost=1.0),
+        "f2": Function(
+            func=ackley_f2, is_known=False, in_ndim=1, out_ndim=1, cost=cost2
+        ),
     }
 
     dag = nx.DiGraph()
