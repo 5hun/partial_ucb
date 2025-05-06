@@ -210,6 +210,7 @@ class PartialUCB(PartialQueryAlgorithm):
             cov = self.mods[nm].posterior(tmp_input).covariance_matrix  # type: ignore
             r = (tmp_grad @ (cov @ tmp_grad)).item() / func.cost
             assert r >= 0
+            self.logger.debug(f"Partial UCB: {nm}: {tmp_grad=}, {cov=}, {r=}")
             if r > best_r:
                 best_r = r
                 best_response = PartialQueryResponse(
