@@ -74,7 +74,9 @@ def process_experiment(
     return exp_results
 
 
-def create_all_plots(df: pl.DataFrame, plot_dir: Path) -> None:
+def create_all_plots(
+    df: pl.DataFrame, plot_dir: Path, zero_init_cost: bool = True
+) -> None:
     """Create all plots for the experiment results"""
     plot_dir.mkdir(parents=True, exist_ok=True)
 
@@ -86,6 +88,16 @@ def create_all_plots(df: pl.DataFrame, plot_dir: Path) -> None:
         .alias("cumulative_cost")
         .cast(pl.Int64)
     )
+
+    if zero_init_cost:
+        df = df.with_columns(
+            (
+                pl.col("cumulative_cost")
+                - pl.first("cumulative_cost").over(["problem", "method", "seed"])
+            )
+            .alias("cumulative_cost")
+            .cast(pl.Int64)
+        )
 
     for p in tqdm(sorted(df["problem"].unique()), desc="Plotting"):
         sub_df = df.filter(pl.col("problem") == p)
