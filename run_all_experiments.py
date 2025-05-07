@@ -183,40 +183,57 @@ if __name__ == "__main__":
         #     "function_config": {"ndim": 2, "cost1": 1, "cost2": 1},
         #     "num_initial_samples": 5,
         # },
-        # "ackley_6d_1_1": {
-        #     "function": "ackley",
-        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
-        #     "num_initial_samples": 13,
-        # },
-        # "ackley_6d_1_9": {
-        #     "function": "ackley",
-        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
-        #     "num_initial_samples": 13,
-        # },
+        "ackley_6d_1_1": {
+            "function": "ackley",
+            "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
+            "num_initial_samples": 13,
+        },
+        "ackley_6d_1_9": {
+            "function": "ackley",
+            "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
+            "num_initial_samples": 13,
+        },
         "ackley_6d_1_49": {
             "function": "ackley",
             "function_config": {"ndim": 6, "cost1": 1, "cost2": 49},
             "num_initial_samples": 13,
         },
-        # "pharma": {
-        #     "function": "pharma",
-        #     "function_config": {},
-        #     "num_initial_samples": 9,
-        # },
-        # "norm_2d": {
-        #     "function": "norm",
-        #     "function_config": {"ndim": 2, "p": 2},
-        #     "num_initial_samples": 5,
-        # },
+        "pharma": {
+            "function": "pharma",
+            "function_config": {},
+            "num_initial_samples": 9,
+        },
+        "norm_2d": {
+            "function": "norm",
+            "function_config": {"ndim": 2, "p": 2},
+            "num_initial_samples": 5,
+        },
     }
 
     methods = {
         # "random": {"method": "random", "method_config": {}},
-        "partial-ucb_1": {"method": "partial-ucb", "method_config": {"alpha": 1.0}},
+        "partial-ucb_1": {
+            "method": "partial-ucb",
+            "method_config": {
+                "alpha": 1.0,
+                "train_yvar": 1e-5,
+                "warm_start_model": True,
+            },
+        },
         # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
-        "full-ucb_1": {"method": "full-ucb", "method_config": {"alpha": 1.0}},
+        "full-ucb_1": {
+            "method": "full-ucb",
+            "method_config": {
+                "alpha": 1.0,
+                "warm_start_model": True,
+                "train_yvar": 1e-5,
+            },
+        },
         # "full-ucb_2": {"method": "full-ucb", "method_config": {"alpha": 2.0}},
-        "full-logei": {"method": "full-logei", "method_config": {}},
+        "full-logei": {
+            "method": "full-logei",
+            "method_config": {"warm_start_model": True, "train_yvar": 1e-5},
+        },
     }
 
     # Create list of all parameter combinations

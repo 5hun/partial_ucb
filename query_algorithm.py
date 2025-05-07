@@ -127,12 +127,14 @@ class PartialUCB(PartialQueryAlgorithm):
         problem: Problem,
         alpha: float,
         logger: logging.Logger,
+        warm_start_model: bool,
         train_yvar: float = 1e-5,
     ):
         self.problem = problem
         self.fun = problem.obj
         self.alpha = alpha
         self.train_yvar = train_yvar
+        self.warm_start_model = warm_start_model
         self.previous_sols = None
         self.logger = logger
         self.mods = None
@@ -162,7 +164,9 @@ class PartialUCB(PartialQueryAlgorithm):
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict() if self.mods is not None else None
+                    self.mods[nm].state_dict()
+                    if self.mods is not None and self.warm_start_model
+                    else None
                 ),
             )
             for nm, (x, y) in data.items()
@@ -228,7 +232,9 @@ class PartialUCB(PartialQueryAlgorithm):
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict() if self.mods is not None else None
+                    self.mods[nm].state_dict()
+                    if self.mods is not None and self.warm_start_model
+                    else None
                 ),
             )
             for nm, (x, y) in data.items()
@@ -291,19 +297,31 @@ class FullUCB(FullQueryAlgorithm):
         problem: Problem,
         alpha: float,
         logger: logging.Logger,
+        warm_start_model: bool,
         train_yvar: float = 1e-5,
     ):
         self.problem = problem
         self.fun = problem.obj
         self.alpha = alpha
         self.train_yvar = train_yvar
+        self.warm_start_model = warm_start_model
         self.logger = logger
+        self.model = None
 
     def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
-        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        self.model = gp.get_model(
+            train_X,
+            train_Y,
+            train_yvar=self.train_yvar,
+            state_dict=(
+                self.model.state_dict()
+                if self.warm_start_model and self.model is not None
+                else None
+            ),
+        )
         res = optimize.optimize(
             fun=gp.UCBFunction(
-                model,
+                self.model,
                 self.alpha,
                 lower=True if self.problem.sense == ObjectiveSense.MINIMIZE else False,
             ),
@@ -317,9 +335,18 @@ class FullUCB(FullQueryAlgorithm):
         return FullQueryResponse(query_input=x, info={"r": res.fun})
 
     def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
-        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        self.model = gp.get_model(
+            train_X,
+            train_Y,
+            train_yvar=self.train_yvar,
+            state_dict=(
+                self.model.state_dict()
+                if self.warm_start_model and self.model is not None
+                else None
+            ),
+        )
         res = optimize.optimize(
-            fun=gp.ExpectationFunction(model),
+            fun=gp.ExpectationFunction(self.model),
             bounds=self.problem.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
@@ -335,15 +362,27 @@ class FullLogEI(FullQueryAlgorithm):
         self,
         problem: Problem,
         logger: logging.Logger,
+        warm_start_model: bool,
         train_yvar: float = 1e-5,
     ):
         self.problem = problem
         self.fun = problem.obj
         self.train_yvar = train_yvar
+        self.warm_start_model = warm_start_model
         self.logger = logger
+        self.model = None
 
     def step(self, train_X: Tensor, train_Y: Tensor) -> FullQueryResponse:
-        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        self.model = gp.get_model(
+            train_X,
+            train_Y,
+            train_yvar=self.train_yvar,
+            state_dict=(
+                self.model.state_dict()
+                if self.warm_start_model and self.model is not None
+                else None
+            ),
+        )
 
         best_f = (
             train_Y.max()
@@ -351,7 +390,7 @@ class FullLogEI(FullQueryAlgorithm):
             else train_Y.min()
         ).item()
         logei_acq = botorch.acquisition.LogExpectedImprovement(
-            model=model,
+            model=self.model,
             best_f=best_f,
             maximize=True if self.problem.sense == ObjectiveSense.MAXIMIZE else False,
         )
@@ -369,9 +408,18 @@ class FullLogEI(FullQueryAlgorithm):
         return FullQueryResponse(query_input=x, info={"r": res.fun})
 
     def get_solution(self, train_X: Tensor, train_Y: Tensor) -> tuple[Tensor, float]:
-        model = gp.get_model(train_X, train_Y, train_yvar=self.train_yvar)
+        self.model = gp.get_model(
+            train_X,
+            train_Y,
+            train_yvar=self.train_yvar,
+            state_dict=(
+                self.model.state_dict()
+                if self.warm_start_model and self.model is not None
+                else None
+            ),
+        )
         res = optimize.optimize(
-            fun=gp.ExpectationFunction(model),
+            fun=gp.ExpectationFunction(self.model),
             bounds=self.problem.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
