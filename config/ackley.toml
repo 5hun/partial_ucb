@@ -7,7 +7,7 @@ method = "partial-ucb"
 
 num_initial_samples = 5
 
-num_iter = 20
+max_iter = 20
 
 [function_config]
 ndim = 2

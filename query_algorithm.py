@@ -21,7 +21,9 @@ class PartialQueryResponse:
 
 
 class PartialQueryAlgorithm:
-    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> PartialQueryResponse:
+    def step(
+        self, data: dict[str, tuple[Tensor, Tensor]], budget: int
+    ) -> PartialQueryResponse:
         raise NotImplementedError()
 
     def get_solution(
@@ -157,7 +159,9 @@ class PartialUCB(PartialQueryAlgorithm):
         fval = res.fun
         return x, noise, fval
 
-    def step(self, data: dict[str, tuple[Tensor, Tensor]]) -> PartialQueryResponse:
+    def step(
+        self, data: dict[str, tuple[Tensor, Tensor]], budget: int
+    ) -> PartialQueryResponse:
         self.mods = {
             nm: gp.get_model(
                 x,
@@ -204,6 +208,9 @@ class PartialUCB(PartialQueryAlgorithm):
         for nm in self.fun.name2func:
             func = self.fun.name2func[nm]
             if func.is_known:
+                continue
+            assert func.cost is not None
+            if func.cost > budget:
                 continue
             tmp_res = eval_cache[nm]
             tmp_grad = tmp_res.grad

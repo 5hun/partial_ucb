@@ -28,6 +28,10 @@ class Function:
         if self.is_known and self.cost is not None:
             raise ValueError("cost of known function should be None")
 
+        # unknown function should have cost
+        if not self.is_known and self.cost is None:
+            raise ValueError("cost of unknown function should not be None")
+
 
 class DAGFunction:
     def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph):
@@ -128,6 +132,15 @@ class DAGFunction:
     def get_cost(self, name: str) -> int:
         func = self.name2func[name]
         return getattr(func, "cost", 0)
+
+    def available_funcs(self, budget: int) -> list[str]:
+        available = []
+        for node in self.dag.nodes:
+            func_name = self.dag.nodes[node]["func"]
+            func = self.name2func[func_name]
+            if func.cost is not None and func.cost <= budget:
+                available.append(func_name)
+        return available
 
     def total_cost(self) -> int:
         total_cost = 0

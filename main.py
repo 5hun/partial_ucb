@@ -82,6 +82,9 @@ def main_loop_partial(
 ):
     output_dir = Path(config["output_dir"])
 
+    max_iter = config["max_iter"]
+    budget = config["budget"]
+
     # Get initial samples
     initial_samples = util.uniform_sampling(
         config["num_initial_samples"], problem.bounds
@@ -100,6 +103,13 @@ def main_loop_partial(
         data[nm] = (tmp_input, initial_result[nm])
         initial_cost += problem.obj.get_cost(nm) * initial_samples.shape[0]
     logger.debug(f"Initial data collected for {list(data.keys())}")
+
+    if not config["ignore_initial_cost"]:
+        budget -= initial_cost
+    if budget < 0:
+        raise ValueError(
+            f"Budget {budget} is less than 0 after initial cost {initial_cost}"
+        )
 
     t1 = time.time()
     sol, est_val = method.get_solution(data)
@@ -128,10 +138,15 @@ def main_loop_partial(
         json.dump(results, fout, indent=4)
     logger.debug("Initial results saved to intermediate file")
 
-    num_iter = config["num_iter"]
-    for i in tqdm(range(num_iter), desc="Iterations"):
+    for i in tqdm(range(max_iter), desc="Iterations"):
+        if len(problem.obj.available_funcs(budget)) == 0:
+            logger.debug(
+                f"No available functions to query with remaining budget: {budget}"
+            )
+            break
+
         t1 = time.time()
-        query = method.step(data)
+        query = method.step(data, budget)
         get_query_time = time.time() - t1
         res = problem.obj.eval_sub(query.query_function, query.query_input)
 
@@ -142,6 +157,8 @@ def main_loop_partial(
             torch.cat((data_output, res), dim=0),
         )
         tmp_cost = problem.obj.get_cost(query.query_function)
+        assert budget >= tmp_cost
+        budget -= tmp_cost
 
         logger.debug(
             f"Iteration {i + 1}: Data updated for function {query.query_function}"
@@ -188,6 +205,19 @@ def main_loop_full(
     logger: logging.Logger,
 ):
     output_dir = Path(config["output_dir"])
+
+    max_iter = config["max_iter"]
+    budget = config["budget"]
+
+    initial_cost = problem.obj.total_cost() * config["num_initial_samples"]
+
+    if not config["ignore_initial_cost"]:
+        budget -= initial_cost
+    if budget < 0:
+        raise ValueError(
+            f"Budget {budget} is less than 0 after initial cost {initial_cost}"
+        )
+
     # Get initial samples
     train_X = util.uniform_sampling(config["num_initial_samples"], problem.bounds)
     logger.debug(f"Generated {config['num_initial_samples']} initial samples")
@@ -210,7 +240,7 @@ def main_loop_full(
             "estimated_solution": sol.tolist()[0],
             "estimated_objective": est_val,
             "true_objective": real_val,
-            "initial_cost": problem.obj.total_cost() * config["num_initial_samples"],
+            "initial_cost": initial_cost,
             "get_solution_time": get_solution_time,
         },
         "iter": [],
@@ -221,8 +251,13 @@ def main_loop_full(
         json.dump(results, fout, indent=4)
     logger.debug("Initial results saved to intermediate file")
 
-    num_iter = config["num_iter"]
-    for i in tqdm(range(num_iter), desc="Iterations"):
+    for i in tqdm(range(max_iter), desc="Iterations"):
+        if budget < problem.obj.total_cost():
+            logger.debug(
+                f"Budget {budget} is less than total cost {problem.obj.total_cost()}"
+            )
+            break
+
         t1 = time.time()
         query = method.step(train_X, train_Y)
         get_query_time = time.time() - t1
