@@ -11,6 +11,7 @@ from matplotlib import pyplot as plt
 import seaborn as sns
 
 import main
+from joblib import Parallel, delayed
 
 
 def process_experiment(
@@ -181,11 +182,11 @@ def create_all_plots(
 if __name__ == "__main__":
     base_output_dir = Path("output/experiments")
 
-    num_parallel = 1
+    num_parallel = 8
 
     base_settings = {
         "log_level": "DEBUG",
-        "max_iter": 1000,
+        "max_iter": 20,
         "budget": 700,
         "ignore_initial_cost": True,
     }
@@ -257,13 +258,13 @@ if __name__ == "__main__":
         process_experiment, base_settings, problems, methods, base_output_dir
     )
 
-    with mp.Pool(processes=num_parallel) as pool:
-        results = list(
-            tqdm(pool.imap(worker_func, param_combos), total=len(param_combos))
-        )
+    # Use joblib for parallel processing
+    results = Parallel(n_jobs=num_parallel, verbose=10)(
+        delayed(worker_func)(combo) for combo in param_combos
+    )
 
     # Flatten results list
-    df = [item for sublist in results for item in sublist]
+    df = [item for sublist in results for item in sublist]  # type: ignore
 
     df = pl.DataFrame(df)
     df.write_csv(base_output_dir / "summary.csv")
