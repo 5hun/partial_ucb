@@ -160,6 +160,7 @@ def main_loop_partial(
         assert budget >= tmp_cost
         budget -= tmp_cost
 
+        logger.debug(f"Query evaluated: {query}, {res.tolist()[0]}")
         logger.debug(
             f"Iteration {i + 1}: Data updated for function {query.query_function}"
         )
@@ -168,10 +169,14 @@ def main_loop_partial(
         new_sol, new_est = method.get_solution(data)
         get_solution_time = time.time() - t1
         real_val = problem.obj(new_sol).item()
+        logger.debug(
+            f"Iteration {i + 1}: Proposed solution's estimated value: {new_est}, real value: {real_val}"
+        )
 
         query_info = {
             "function": query.query_function,
             "input": query.query_input.tolist()[0],
+            "output": res.tolist()[0],
         }
         if "r" in query.info:
             query_info["acquisition_value"] = query.info["r"]
@@ -265,6 +270,8 @@ def main_loop_full(
 
         train_X = torch.cat((train_X, query.query_input), dim=0)
         train_Y = torch.cat((train_Y, res), dim=0)
+        assert budget >= problem.obj.total_cost()
+        budget -= problem.obj.total_cost()
         logger.debug(f"Iteration {i + 1}: Data updated")
 
         t1 = time.time()

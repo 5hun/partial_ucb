@@ -151,7 +151,7 @@ class PartialUCB(PartialQueryAlgorithm):
             num_initial_samples=100,
             sense=self.problem.sense,
         )
-        self.logger.debug(f"Optimization result: {res}")
+        self.logger.debug(f"UCB Optimization result: {res}")
         # assert res.success
         x_org = torch.tensor(res.x).reshape(1, -1)
         x = x_org[:, : self.problem.bounds.shape[1]]
@@ -176,7 +176,7 @@ class PartialUCB(PartialQueryAlgorithm):
             for nm, (x, y) in data.items()
         }
         result, _noise, _result_fval = self._optimize_dagucb(self.mods)
-        self.logger.debug(f"Optimize DAGUCB result: {result=}")
+        self.logger.debug(f"UCB Optimization result: {result=}")
 
         name2func = self.fun.name2func.copy()
         for nm in self.mods:
@@ -262,7 +262,7 @@ class PartialUCB(PartialQueryAlgorithm):
             num_initial_samples=100,
             sense=self.problem.sense,
         )
-        self.logger.debug(f"Optimization result: {res}")
+        self.logger.debug(f"Posterior Mean Optimization result: {res}")
         # assert res.success
         sol = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun
@@ -278,6 +278,9 @@ class PartialUCB(PartialQueryAlgorithm):
                 best_idx = torch.argmin(prev_vals)
                 sol = self.previous_sols[best_idx].reshape(1, -1)
                 fval = prev_vals[best_idx].item() * self.problem.sense.value
+        self.logger.debug(
+            f"Posterior Mean Optimization (using previous sols): {sol=}, {fval=}"
+        )
 
         return sol, fval
 

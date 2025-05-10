@@ -186,7 +186,7 @@ if __name__ == "__main__":
 
     base_settings = {
         "log_level": "DEBUG",
-        "max_iter": 20,
+        "max_iter": 700,
         "budget": 700,
         "ignore_initial_cost": True,
     }

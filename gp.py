@@ -58,12 +58,16 @@ def get_model(
         input_transform=Normalize(d=train_x.shape[-1]),
         outcome_transform=Standardize(m=1),
     ).to(train_x)
-    mll = ExactMarginalLogLikelihood(model.likelihood, model)
 
     if state_dict is not None:
-        model.load_state_dict(state_dict)
+        # model.load_state_dict(state_dict)
+        drop = ("input_transform", "outcome_transform")
+        warm_sd = {k: v for k, v in state_dict.items() if not k.startswith(drop)}
+        model.load_state_dict(warm_sd, strict=False)
 
-    fit_gpytorch_mll(mll)
+    mll = ExactMarginalLogLikelihood(model.likelihood, model)
+
+    fit_gpytorch_mll(mll, max_attempts=10, pick_bast_of_all_attempts=True)
     return model
 
 

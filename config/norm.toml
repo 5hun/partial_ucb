@@ -1,16 +1,21 @@
-output_dir = "output/norm"
+output_dir = "output/norm_1d"
 seed = 0
 function = "norm"
 
 method = "partial-ucb"
 
-num_initial_samples = 3
+num_initial_samples = 1
 
-max_iter = 20
+max_iter = 100
+budget = 100
+ignore_initial_cost = true
+
+log_level = "debug"
 
 [function_config]
-ndim = 2
+ndim = 1
 p = 2
 
 [method_config]
 alpha = 1.0
+warm_start_model = true

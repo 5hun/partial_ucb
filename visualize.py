@@ -32,7 +32,7 @@ def step_function_intepolate(
     return np.array(x_exp), np.array(y_exp)
 
 
-def plot_objective_values(result: dict, vis_dir: Path) -> None:
+def plot_objective_values(config: dict, result: dict, vis_dir: Path) -> None:
     obj_vals = np.array(
         [result["init"]["true_objective"]]
         + [x["true_objective"] for x in result["iter"]]
@@ -48,6 +48,8 @@ def plot_objective_values(result: dict, vis_dir: Path) -> None:
     costs = np.array(
         [result["init"]["initial_cost"]] + [x["cost"] for x in result["iter"]]
     )
+    if config["ignore_initial_cost"]:
+        costs[0] = 0
     cum_costs = np.cumsum(costs)
     cum_costs2, obj_vals2 = step_function_intepolate(cum_costs, obj_vals)
     _, est_vals2 = step_function_intepolate(cum_costs, est_vals)
@@ -173,7 +175,7 @@ def visualize(config: dict) -> None:
     vis_dir = output_dir / "visualization"
     vis_dir.mkdir(parents=True, exist_ok=True)
 
-    plot_objective_values(result, vis_dir)
+    plot_objective_values(config, result, vis_dir)
     plot_query_inputs(result, vis_dir)
     if len(result["init"]["estimated_solution"]) == 2:
         plot_proposed_solutions(result, vis_dir)
