@@ -182,7 +182,7 @@ def create_all_plots(
 if __name__ == "__main__":
     base_output_dir = Path("output/experiments")
 
-    num_parallel = 8
+    num_parallel = 6
 
     base_settings = {
         "log_level": "DEBUG",

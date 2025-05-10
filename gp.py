@@ -37,7 +37,7 @@ def ucb(mod: SingleTaskGP, x: Tensor, alpha: Tensor) -> Tensor:
 def get_model(
     train_x: Float[Tensor, "n d"],
     train_y: Float[Tensor, "n 1"],
-    train_yvar: float,
+    train_yvar: float | None = None,
     state_dict: None | dict = None,
 ) -> SingleTaskGP:
     r"""
@@ -54,7 +54,9 @@ def get_model(
     model = SingleTaskGP(
         train_x,
         train_y,
-        train_Yvar=train_yvar * torch.ones_like(train_y),
+        train_Yvar=(
+            train_yvar * torch.ones_like(train_y) if train_yvar is not None else None
+        ),
         input_transform=Normalize(d=train_x.shape[-1]),
         outcome_transform=Standardize(m=1),
     ).to(train_x)

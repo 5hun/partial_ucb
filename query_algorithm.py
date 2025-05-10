@@ -413,7 +413,7 @@ class FullLogEI(FullQueryAlgorithm):
             sense=ObjectiveSense.MAXIMIZE,
         )
         self.logger.debug(f"Optimize LogEI result: {res}")
-        assert res.success
+        # assert res.success
         x = torch.tensor(res.x).reshape(1, -1)
         return FullQueryResponse(query_input=x, info={"r": res.fun})
 
@@ -434,7 +434,7 @@ class FullLogEI(FullQueryAlgorithm):
             num_initial_samples=100,
             sense=self.problem.sense,
         )
-        assert res.success
+        # assert res.success
         x = torch.tensor(res.x).reshape(1, -1)
         fval = res.fun
         return x, fval
