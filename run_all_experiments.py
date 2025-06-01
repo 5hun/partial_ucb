@@ -34,7 +34,7 @@ def process_experiment(
     tmp_stg["output_dir"] = str(tmp_output_dir)
     tmp_output_dir.mkdir(parents=True, exist_ok=True)
 
-    stg_file = tmp_output_dir / "settings.toml"
+    stg_file = tmp_output_dir / "config.toml"
     with open(stg_file, "wb") as fout:
         tomli_w.dump(tmp_stg, fout)
 
@@ -138,6 +138,7 @@ def create_all_plots(
             hue="method",
             kind="line",
             aspect=2,
+            errorbar=("se", 2),
         )
         plt.title(f"Problem {p}")
         plt.xlabel("Cumulative Cost")
@@ -217,10 +218,15 @@ if __name__ == "__main__":
             "function_config": {},
             "num_initial_samples": 9,
         },
-        "norm_2d": {
-            "function": "norm",
-            "function_config": {"ndim": 2, "p": 2},
-            "num_initial_samples": 5,
+        # "norm_2d": {
+        #     "function": "norm",
+        #     "function_config": {"ndim": 2, "p": 2},
+        #     "num_initial_samples": 5,
+        # },
+        "freesolv3": {
+            "function": "freesolv3",
+            "function_config": {"cost1": 1, "cost2": 49},
+            "num_initial_samples": 7,
         },
     }
 
@@ -230,7 +236,7 @@ if __name__ == "__main__":
             "method": "partial-ucb",
             "method_config": {
                 "alpha": 1.0,
-                "train_yvar": 1e-5,
+                "train_yvar": 1e-4,
                 "warm_start_model": True,
             },
         },

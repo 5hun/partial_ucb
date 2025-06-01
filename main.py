@@ -14,15 +14,14 @@ import tomli_w
 
 import util
 import functions
-import benchmarks.ackley as ackley
-import benchmarks.norm as norm
-import benchmarks.pharma as pharma
+from benchmarks import ackley, norm, pharma, freesolv3
 import query_algorithm
 
 FUNCTIONS = {
     "ackley": ackley.get_ackley,
     "norm": norm.get_norm,
     "pharma": pharma.get_pharma,
+    "freesolv3": freesolv3.get_freesolv3,
 }
 
 METHODS = {

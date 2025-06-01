@@ -52,8 +52,8 @@ def get_model(
     """
 
     model = SingleTaskGP(
-        train_x,
-        train_y,
+        train_x.detach(),
+        train_y.detach(),
         train_Yvar=(
             train_yvar * torch.ones_like(train_y) if train_yvar is not None else None
         ),
@@ -62,7 +62,6 @@ def get_model(
     ).to(train_x)
 
     if state_dict is not None:
-        # model.load_state_dict(state_dict)
         drop = ("input_transform", "outcome_transform")
         warm_sd = {k: v for k, v in state_dict.items() if not k.startswith(drop)}
         model.load_state_dict(warm_sd, strict=False)
@@ -70,6 +69,8 @@ def get_model(
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
 
     fit_gpytorch_mll(mll, max_attempts=10, pick_bast_of_all_attempts=True)
+
+    model.eval()
     return model
 
 
