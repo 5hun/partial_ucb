@@ -240,6 +240,14 @@ if __name__ == "__main__":
                 "warm_start_model": True,
             },
         },
+        "fn-ucb_1": {
+            "method": "fn-ucb",
+            "method_config": {
+                "alpha": 1.0,
+                "train_yvar": 1e-4,
+                "warm_start_model": True,
+            },
+        },
         # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
         "full-ucb_1": {
             "method": "full-ucb",

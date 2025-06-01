@@ -35,6 +35,10 @@ class Function:
 
 class DAGFunction:
     def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph):
+        assert (
+            "__full__" not in name2func
+        ), "objective function should not have the function name '__full__'"
+
         self.name2func = name2func
         self.dag = dag
 

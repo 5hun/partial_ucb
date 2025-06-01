@@ -26,6 +26,7 @@ FUNCTIONS = {
 
 METHODS = {
     "partial-ucb": query_algorithm.PartialUCB,
+    "fn-ucb": query_algorithm.FNUCB,
     "full-ucb": query_algorithm.FullUCB,
     "full-logei": query_algorithm.FullLogEI,
     "random": query_algorithm.Random,
@@ -73,8 +74,8 @@ def setup_logging(output_dir: Path, log_level: str):
     return logger
 
 
-def main_loop_partial(
-    method: query_algorithm.PartialQueryAlgorithm,
+def run_experiment(
+    method: query_algorithm.QueryAlgorithm,
     problem: functions.Problem,
     config: dict,
     logger: logging.Logger,
@@ -101,6 +102,13 @@ def main_loop_partial(
         assert initial_result[nm].shape == (initial_samples.shape[0], func.out_ndim)
         data[nm] = (tmp_input, initial_result[nm])
         initial_cost += problem.obj.get_cost(nm) * initial_samples.shape[0]
+
+    result_name = problem.obj.get_output_node_name()
+    data["__full__"] = (
+        initial_samples,
+        initial_result[result_name],
+    )
+
     logger.debug(f"Initial data collected for {list(data.keys())}")
 
     if not config["ignore_initial_cost"]:
@@ -147,22 +155,73 @@ def main_loop_partial(
         t1 = time.time()
         query = method.step(data, budget)
         get_query_time = time.time() - t1
-        res = problem.obj.eval_sub(query.query_function, query.query_input)
+        if query is None:
+            logger.debug(f"No query returned with remaining budget: {budget}")
+            break
+        elif query.function_name != "__full__":
+            res = problem.obj.eval_sub(query.function_name, query.input)
+            data_input = data[query.function_name][0]
+            data_output = data[query.function_name][1]
+            data[query.function_name] = (
+                torch.cat((data_input, query.input), dim=0),
+                torch.cat((data_output, res), dim=0),
+            )
+            tmp_cost = problem.obj.get_cost(query.function_name)
+            assert budget >= tmp_cost
+            budget -= tmp_cost
+            logger.debug(f"Query evaluated: {query}, {res.tolist()[0]}")
+            logger.debug(
+                f"Iteration {i + 1}: Data updated for function {query.function_name}"
+            )
+            query_info = {
+                "function": query.function_name,
+                "input": query.input.tolist()[0],
+                "result": {
+                    query.function_name: {
+                        "input": query.input.tolist()[0],
+                        "output": res.tolist()[0],
+                    }
+                },
+            }
+            if "acquisition_value" in query.info:
+                query_info["acquisition_value"] = query.info["acquisition_value"]
+        else:
+            assert query.function_name == "__full__"
+            res = problem.obj.eval(query.input)
 
-        data_input = data[query.query_function][0]
-        data_output = data[query.query_function][1]
-        data[query.query_function] = (
-            torch.cat((data_input, query.query_input), dim=0),
-            torch.cat((data_output, res), dim=0),
-        )
-        tmp_cost = problem.obj.get_cost(query.query_function)
-        assert budget >= tmp_cost
-        budget -= tmp_cost
+            query_info = {
+                "function": query.function_name,
+                "input": query.input.tolist()[0],
+                "result": {},
+            }
 
-        logger.debug(f"Query evaluated: {query}, {res.tolist()[0]}")
-        logger.debug(
-            f"Iteration {i + 1}: Data updated for function {query.query_function}"
-        )
+            for nm, func in problem.obj.name2func.items():
+                if func.is_known:
+                    continue
+                tmp_input = problem.obj.get_input_tensor(nm, res, query.input)
+                assert tmp_input.shape == (query.input.shape[0], func.in_ndim)
+                assert res[nm].shape == (query.input.shape[0], func.out_ndim)
+                data[nm] = (
+                    torch.cat((data[nm][0], tmp_input), dim=0),
+                    torch.cat((data[nm][1], res[nm]), dim=0),
+                )
+                query_info["result"][nm] = {
+                    "input": tmp_input.tolist(),
+                    "output": res[nm].tolist(),
+                }
+
+            result_name = problem.obj.get_output_node_name()
+            data["__full__"] = (
+                torch.cat((data["__full__"][0], query.input), dim=0),
+                torch.cat((data["__full__"][1], res[result_name]), dim=0),
+            )
+
+            tmp_cost = problem.obj.total_cost()
+            assert budget >= tmp_cost
+            budget -= tmp_cost
+
+            if "acquisition_value" in query.info:
+                query_info["acquisition_value"] = query.info["acquisition_value"]
 
         t1 = time.time()
         new_sol, new_est = method.get_solution(data)
@@ -172,13 +231,6 @@ def main_loop_partial(
             f"Iteration {i + 1}: Proposed solution's estimated value: {new_est}, real value: {real_val}"
         )
 
-        query_info = {
-            "function": query.query_function,
-            "input": query.query_input.tolist()[0],
-            "output": res.tolist()[0],
-        }
-        if "r" in query.info:
-            query_info["acquisition_value"] = query.info["r"]
         results["iter"].append(
             {
                 "iter": i + 1,
@@ -187,111 +239,6 @@ def main_loop_partial(
                 "true_objective": real_val,
                 "query": query_info,
                 "cost": tmp_cost,
-                "get_query_time": get_query_time,
-                "get_solution_time": get_solution_time,
-            }
-        )
-        logger.debug(f"Iteration {i + 1}: Results updated")
-
-        with open(output_dir / "results_itermediate.json", "w") as fout:
-            json.dump(results, fout, indent=4)
-        logger.debug(f"Iteration {i + 1}: Results saved to intermediate file")
-
-    with open(output_dir / "results.json", "w") as fout:
-        json.dump(results, fout, indent=4)
-    logger.debug("Final results saved")
-
-
-def main_loop_full(
-    method: query_algorithm.FullQueryAlgorithm,
-    problem: functions.Problem,
-    config: dict,
-    logger: logging.Logger,
-):
-    output_dir = Path(config["output_dir"])
-
-    max_iter = config["max_iter"]
-    budget = config["budget"]
-
-    initial_cost = problem.obj.total_cost() * config["num_initial_samples"]
-
-    if not config["ignore_initial_cost"]:
-        budget -= initial_cost
-    if budget < 0:
-        raise ValueError(
-            f"Budget {budget} is less than 0 after initial cost {initial_cost}"
-        )
-
-    # Get initial samples
-    train_X = util.uniform_sampling(config["num_initial_samples"], problem.bounds)
-    logger.debug(f"Generated {config['num_initial_samples']} initial samples")
-
-    train_Y = problem.obj(train_X)
-
-    t1 = time.time()
-    sol, est_val = method.get_solution(train_X, train_Y)
-    get_solution_time = time.time() - t1
-
-    real_val = problem.obj(sol).item()
-    results = {
-        "init": {
-            "initial_samples": {
-                "__full__": {
-                    "input": train_X.tolist(),
-                    "output": train_Y.tolist(),
-                }
-            },
-            "estimated_solution": sol.tolist()[0],
-            "estimated_objective": est_val,
-            "true_objective": real_val,
-            "initial_cost": initial_cost,
-            "get_solution_time": get_solution_time,
-        },
-        "iter": [],
-    }
-    logger.debug("Initial results computed")
-
-    with open(output_dir / "results_itermediate.json", "w") as fout:
-        json.dump(results, fout, indent=4)
-    logger.debug("Initial results saved to intermediate file")
-
-    for i in tqdm(range(max_iter), desc="Iterations"):
-        if budget < problem.obj.total_cost():
-            logger.debug(
-                f"Budget {budget} is less than total cost {problem.obj.total_cost()}"
-            )
-            break
-
-        t1 = time.time()
-        query = method.step(train_X, train_Y)
-        get_query_time = time.time() - t1
-        res = problem.obj(query.query_input)
-
-        train_X = torch.cat((train_X, query.query_input), dim=0)
-        train_Y = torch.cat((train_Y, res), dim=0)
-        assert budget >= problem.obj.total_cost()
-        budget -= problem.obj.total_cost()
-        logger.debug(f"Iteration {i + 1}: Data updated")
-
-        t1 = time.time()
-        new_sol, new_est = method.get_solution(train_X, train_Y)
-        get_solution_time = time.time() - t1
-        real_val = problem.obj(new_sol).item()
-
-        query_info = {
-            "function": "__full__",
-            "input": query.query_input.tolist()[0],
-        }
-        if "r" in query.info:
-            query_info["acquisition_value"] = query.info["r"]
-        results["iter"].append(
-            {
-                "iter": i + 1,
-                "estimated_solution": new_sol.tolist()[0],
-                "estimated_objective": new_est,
-                "true_objective": real_val,
-                "query": query_info,
-                "cost": problem.obj.total_cost(),
                 "get_query_time": get_query_time,
                 "get_solution_time": get_solution_time,
             }
@@ -334,16 +281,12 @@ def main(config: dict):
 
     assert method_name in METHODS, f"Method {method_name} is not supported"
 
-    method: (
-        query_algorithm.PartialQueryAlgorithm | query_algorithm.FullQueryAlgorithm
-    ) = METHODS[method_name](problem=problem, logger=logger, **method_config)
+    method: query_algorithm.QueryAlgorithm = METHODS[method_name](
+        problem=problem, logger=logger, **method_config
+    )
     logger.debug(f"Method {method_name} initialized")
 
-    if isinstance(method, query_algorithm.PartialQueryAlgorithm):
-        main_loop_partial(method, problem, config, logger)
-    else:
-        assert isinstance(method, query_algorithm.FullQueryAlgorithm)
-        main_loop_full(method, problem, config, logger)
+    run_experiment(method, problem, config, logger)
 
 
 if __name__ == "__main__":
