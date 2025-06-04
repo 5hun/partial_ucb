@@ -11,6 +11,8 @@ import numpy as np
 import torch
 from tqdm import tqdm
 import tomli_w
+import matplotlib
+from matplotlib import pyplot as plt
 
 from . import util, functions, query_algorithm
 from .test_functions import ackley, norm, pharma, freesolv3
@@ -288,6 +290,107 @@ def main(config: dict):
     run_experiment(method, problem, config, logger)
 
 
+def step_function_intepolate(
+    x: np.ndarray, y: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    r"""
+    x = [1, 3, 7]
+    y = [0, 1, 2]
+    =>
+    x = [1, 2, 3, 4, 5, 6, 7]
+    y = [0, 0, 1, 1, 1, 1, 2]
+    """
+    x_exp = []
+    y_exp = []
+    for i in range(len(x) - 1):
+        x_exp.append(x[i])
+        y_exp.append(y[i])
+        x_diff = x[i + 1] - x[i]
+        if x_diff > 1:
+            for j in range(1, x_diff):
+                x_exp.append(x[i] + j)
+                y_exp.append(y[i])
+    x_exp.append(x[-1])
+    y_exp.append(y[-1])
+    return np.array(x_exp), np.array(y_exp)
+
+
+def plot_objective_values(config: dict, result: dict, vis_dir: Path) -> None:
+    obj_vals = np.array(
+        [result["init"]["true_objective"]]
+        + [x["true_objective"] for x in result["iter"]]
+    )
+    est_vals = np.array(
+        [result["init"]["estimated_objective"]]
+        + [x["estimated_objective"] for x in result["iter"]]
+    )
+    acq_vals = np.array(
+        [float("nan")] + [x["query"]["acquisition_value"] for x in result["iter"]]
+    )
+
+    costs = np.array(
+        [result["init"]["initial_cost"]] + [x["cost"] for x in result["iter"]]
+    )
+    if config["ignore_initial_cost"]:
+        costs[0] = 0
+    cum_costs = np.cumsum(costs)
+    cum_costs2, obj_vals2 = step_function_intepolate(cum_costs, obj_vals)
+    _, est_vals2 = step_function_intepolate(cum_costs, est_vals)
+
+    fig, axs = plt.subplots(4, 1, figsize=(10, 12))
+    axs[0].plot(obj_vals, label="True Objective")
+    axs[0].plot(est_vals, label="Estimated Objective")
+    axs[0].set_title("Objective Values")
+    axs[0].set_xlabel("Iteration")
+    axs[0].set_ylabel("Objective Value")
+    axs[0].legend()
+
+    # cum costs vs obj
+    axs[1].plot(cum_costs2, obj_vals2, label="True Objective")
+    axs[1].plot(cum_costs2, est_vals2, label="Estimated Objective")
+    axs[1].set_title("Cumulative Cost vs Objective Values")
+    axs[1].set_xlabel("Cumulative Cost")
+    axs[1].set_ylabel("Objective Value")
+    axs[1].legend()
+
+    axs[2].plot(obj_vals - est_vals, label="Error")
+    axs[2].set_title("Error")
+    axs[2].set_xlabel("Iteration")
+    axs[2].set_ylabel("Error")
+    axs[2].legend()
+
+    axs[3].plot(acq_vals, label="Acquisition Value")
+    axs[3].set_title("Acquisition Values")
+    axs[3].set_xlabel("Iteration")
+    axs[3].set_ylabel("Acquisition Value")
+    axs[3].legend()
+
+    plt.tight_layout()
+    plt.savefig(vis_dir / "objective_values.png")
+    plt.close(fig)
+
+
+def visualize(config: dict) -> None:
+    output_dir = Path(config["output_dir"])
+
+    sol_file = output_dir / "results.json"
+    if not sol_file.exists():
+        sol_file = output_dir / "results_intermediate.json"
+    if not sol_file.exists():
+        raise FileNotFoundError(
+            f"Solution files results.json and results_intermediate.json are not found."
+        )
+
+    with open(sol_file, "r") as fin:
+        result = json.load(fin)
+
+    vis_dir = output_dir / "visualization"
+    vis_dir.mkdir(parents=True, exist_ok=True)
+
+    matplotlib.use("Agg")
+    plot_objective_values(config, result, vis_dir)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("config", type=str)
@@ -297,3 +400,4 @@ if __name__ == "__main__":
         config = tml.load(fin)
 
     main(config)
+    visualize(config)
