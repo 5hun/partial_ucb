@@ -68,7 +68,7 @@ def get_model(
 
     mll = ExactMarginalLogLikelihood(model.likelihood, model)
 
-    fit_gpytorch_mll(mll, max_attempts=10, pick_bast_of_all_attempts=True)
+    fit_gpytorch_mll(mll, max_attempts=10, pick_best_of_all_attempts=True)
 
     model.eval()
     return model

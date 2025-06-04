@@ -142,7 +142,7 @@ def run_experiment(
     }
     logger.debug("Initial results computed")
 
-    with open(output_dir / "results_itermediate.json", "w") as fout:
+    with open(output_dir / "results_intermediate.json", "w") as fout:
         json.dump(results, fout, indent=4)
     logger.debug("Initial results saved to intermediate file")
 
@@ -246,7 +246,7 @@ def run_experiment(
         )
         logger.debug(f"Iteration {i + 1}: Results updated")
 
-        with open(output_dir / "results_itermediate.json", "w") as fout:
+        with open(output_dir / "results_intermediate.json", "w") as fout:
             json.dump(results, fout, indent=4)
         logger.debug(f"Iteration {i + 1}: Results saved to intermediate file")
 
@@ -290,7 +290,7 @@ def main(config: dict):
     run_experiment(method, problem, config, logger)
 
 
-def step_function_intepolate(
+def step_function_interpolate(
     x: np.ndarray, y: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
     r"""
@@ -334,8 +334,8 @@ def plot_objective_values(config: dict, result: dict, vis_dir: Path) -> None:
     if config["ignore_initial_cost"]:
         costs[0] = 0
     cum_costs = np.cumsum(costs)
-    cum_costs2, obj_vals2 = step_function_intepolate(cum_costs, obj_vals)
-    _, est_vals2 = step_function_intepolate(cum_costs, est_vals)
+    cum_costs2, obj_vals2 = step_function_interpolate(cum_costs, obj_vals)
+    _, est_vals2 = step_function_interpolate(cum_costs, est_vals)
 
     fig, axs = plt.subplots(4, 1, figsize=(10, 12))
     axs[0].plot(obj_vals, label="True Objective")
