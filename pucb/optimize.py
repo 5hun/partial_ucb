@@ -6,8 +6,8 @@ from scipy.optimize import minimize, OptimizeResult
 import torch
 from torch import Tensor
 
-import util
-from functions import ObjectiveSense
+from . import util
+from .functions import ObjectiveSense
 
 
 def optimize(

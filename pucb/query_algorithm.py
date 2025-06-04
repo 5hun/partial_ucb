@@ -7,10 +7,8 @@ from torch import Tensor
 
 import botorch
 
-from functions import DAGFunction, Function, Problem, ObjectiveSense
-import gp
-import optimize
-import util
+from .functions import DAGFunction, Function, Problem, ObjectiveSense
+from . import gp, optimize, util
 
 
 @dataclass(frozen=True)

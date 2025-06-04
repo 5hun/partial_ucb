@@ -11,8 +11,8 @@ import torch
 import networkx as nx
 import polars as pl
 
-import gp
-from functions import Function, DAGFunction, Problem, ObjectiveSense
+from .. import gp
+from ..functions import Function, DAGFunction, Problem, ObjectiveSense
 
 
 def get_freesolv3(cost1: int, cost2: int) -> Problem:

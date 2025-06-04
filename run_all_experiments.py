@@ -10,7 +10,7 @@ import polars as pl
 from matplotlib import pyplot as plt
 import seaborn as sns
 
-import main
+import pucb.single_run as single_run
 from joblib import Parallel, delayed
 
 
@@ -40,7 +40,7 @@ def process_experiment(
 
     result_file = tmp_output_dir / "results.json"
     if not result_file.exists():
-        main.main(tmp_stg)
+        single_run.main(tmp_stg)
     else:
         print(f"Result file {result_file} already exists. Skipping.")
 
@@ -181,13 +181,13 @@ def create_all_plots(
 
 
 if __name__ == "__main__":
-    base_output_dir = Path("output/experiments")
+    base_output_dir = Path("output/experiments_tmp")
 
     num_parallel = 6
 
     base_settings = {
         "log_level": "DEBUG",
-        "max_iter": 700,
+        "max_iter": 100,
         "budget": 700,
         "ignore_initial_cost": True,
     }

@@ -1,7 +1,7 @@
 import torch
 import networkx as nx
 
-from functions import Function, DAGFunction, Problem, ObjectiveSense
+from ..functions import Function, DAGFunction, Problem, ObjectiveSense
 
 
 def get_norm(ndim: int, p: int) -> Problem:

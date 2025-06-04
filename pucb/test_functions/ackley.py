@@ -13,7 +13,7 @@ from torch import Tensor
 import networkx as nx
 import numpy as np
 
-from functions import Function, DAGFunction, Problem, ObjectiveSense
+from ..functions import Function, DAGFunction, Problem, ObjectiveSense
 
 
 def original_ackley(a: float, b: float, c: float, x: Float[Tensor, "n d"]) -> Tensor:

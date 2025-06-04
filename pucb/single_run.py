@@ -12,10 +12,9 @@ import torch
 from tqdm import tqdm
 import tomli_w
 
-import util
-import functions
-from benchmarks import ackley, norm, pharma, freesolv3
-import query_algorithm
+from . import util, functions, query_algorithm
+from .test_functions import ackley, norm, pharma, freesolv3
+
 
 FUNCTIONS = {
     "ackley": ackley.get_ackley,
