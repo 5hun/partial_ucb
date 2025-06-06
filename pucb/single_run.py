@@ -27,7 +27,7 @@ FUNCTIONS = {
 
 METHODS = {
     "partial-ucb": query_algorithm.PartialUCB,
-    "fn-ucb": query_algorithm.FNUCB,
+    "fn-ucb": query_algorithm.FunctionNetworkUCB,
     "full-ucb": query_algorithm.FullUCB,
     "full-logei": query_algorithm.FullLogEI,
     "random": query_algorithm.Random,
@@ -104,7 +104,7 @@ def run_experiment(
         data[nm] = (tmp_input, initial_result[nm])
         initial_cost += problem.obj.get_cost(nm) * initial_samples.shape[0]
 
-    result_name = problem.obj.get_output_node_name()
+    result_name = problem.obj.get_output_node()
     data["__full__"] = (
         initial_samples,
         initial_result[result_name],
@@ -211,7 +211,7 @@ def run_experiment(
                     "output": res[nm].tolist(),
                 }
 
-            result_name = problem.obj.get_output_node_name()
+            result_name = problem.obj.get_output_node()
             data["__full__"] = (
                 torch.cat((data["__full__"][0], query.input), dim=0),
                 torch.cat((data["__full__"][1], res[result_name]), dim=0),

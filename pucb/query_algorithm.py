@@ -7,7 +7,7 @@ from torch import Tensor
 
 import botorch
 
-from .functions import DAGFunction, Function, Problem, ObjectiveSense
+from .functions import FunctionNetwork, Function, Problem, ObjectiveSense
 from . import gp, optimize, util
 
 
@@ -30,17 +30,17 @@ class QueryAlgorithm:
         raise NotImplementedError()
 
 
-class DAGUCB:
+class UCBCalculator:
     def __init__(
         self,
         problem: Problem,
         alpha: float,
-        mods: dict[str, botorch.models.SingleTaskGP],
+        models: dict[str, botorch.models.SingleTaskGP],
     ):
         self.problem = problem
         self.fun = problem.obj
         self.alpha = alpha
-        self.mods = mods
+        self.models = models
 
         self.noise_info = self._get_noise_info()
         num_noise = sum([y - x for x, y in self.noise_info.values()])
@@ -92,19 +92,19 @@ class DAGUCB:
             x_idx += noise_offset
             x_idx_end += noise_offset
             noise = self.alpha * x[:, x_idx:x_idx_end]
-            res = gp.ucb(self.mods[node], y, noise)
+            res = gp.ucb(self.models[node], y, noise)
 
         cache[node] = res
 
     def eval(self, x: Tensor) -> dict[str, Tensor]:
         cache = {}
-        res_node = self.fun.get_output_node_name()
+        res_node = self.fun.get_output_node()
         self._eval_node(res_node, cache, x)
         return cache
 
     def __call__(self, x: Float[Tensor, "n d"]) -> Float[Tensor, "n 1"]:
         res = self.eval(x)
-        return res[self.fun.get_output_node_name()]
+        return res[self.fun.get_output_node()]
 
 
 class PartialUCB(QueryAlgorithm):
@@ -123,15 +123,15 @@ class PartialUCB(QueryAlgorithm):
         self.warm_start_model = warm_start_model
         self.previous_sols = None
         self.logger = logger
-        self.mods = None
+        self.models = None
 
-    def _optimize_dagucb(
+    def _optimize_UCBCalculator(
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, Tensor, float]:
-        dagucb = DAGUCB(self.problem, self.alpha, models)
+        UCBCalculator = UCBCalculator(self.problem, self.alpha, models)
         res = optimize.optimize(
-            fun=dagucb,
-            bounds=dagucb.bounds,
+            fun=UCBCalculator,
+            bounds=UCBCalculator.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
         )
@@ -146,36 +146,36 @@ class PartialUCB(QueryAlgorithm):
     def step(
         self, data: dict[str, tuple[Tensor, Tensor]], budget: int
     ) -> QueryResponse:
-        self.mods = {
-            nm: gp.get_model(
+        self.models = {
+            nm: gp.fit_gp_model(
                 x,
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict()
-                    if self.mods is not None and self.warm_start_model
+                    self.models[nm].state_dict()
+                    if self.models is not None and self.warm_start_model
                     else None
                 ),
             )
             for nm, (x, y) in data.items()
             if nm != "__full__"
         }
-        result, _noise, _result_fval = self._optimize_dagucb(self.mods)
+        result, _noise, _result_fval = self._optimize_UCBCalculator(self.models)
         self.logger.debug(f"UCB Optimization result: {result=}")
 
         name2func = self.fun.name2func.copy()
-        for nm in self.mods:
+        for nm in self.models:
             func = name2func[nm]
             name2func[nm] = Function(
                 is_known=True,
-                func=gp.ExpectationFunction(self.mods[nm]),
+                func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = DAGFunction(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
 
         eval_cache = tmp_fun.eval(result)
-        res_node = tmp_fun.get_output_node_name()
+        res_node = tmp_fun.get_output_node()
 
         for nm in self.fun.name2func:
             func = self.fun.name2func[nm]
@@ -203,7 +203,7 @@ class PartialUCB(QueryAlgorithm):
             assert tmp_grad is not None
             assert tmp_grad.shape == tmp_res.shape
             tmp_input = tmp_fun.get_input_tensor(nm, eval_cache, result)
-            cov = self.mods[nm].posterior(tmp_input).covariance_matrix  # type: ignore
+            cov = self.models[nm].posterior(tmp_input).covariance_matrix  # type: ignore
             r = (tmp_grad @ (cov @ tmp_grad)).item() / func.cost
             assert r >= 0
             self.logger.debug(f"Partial UCB: {nm}: {tmp_grad=}, {cov=}, {r=}")
@@ -220,14 +220,14 @@ class PartialUCB(QueryAlgorithm):
     def get_solution(
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
-        self.mods = {
-            nm: gp.get_model(
+        self.models = {
+            nm: gp.fit_gp_model(
                 x,
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict()
-                    if self.mods is not None and self.warm_start_model
+                    self.models[nm].state_dict()
+                    if self.models is not None and self.warm_start_model
                     else None
                 ),
             )
@@ -235,15 +235,15 @@ class PartialUCB(QueryAlgorithm):
             if nm != "__full__"
         }
         name2func = self.fun.name2func.copy()
-        for nm in self.mods:
+        for nm in self.models:
             func = name2func[nm]
             name2func[nm] = Function(
                 is_known=True,
-                func=gp.ExpectationFunction(self.mods[nm]),
+                func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = DAGFunction(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
         res = optimize.optimize(
             tmp_fun,
             self.problem.bounds,
@@ -273,7 +273,7 @@ class PartialUCB(QueryAlgorithm):
         return sol, fval
 
 
-class FNUCB(QueryAlgorithm):
+class FunctionNetworkUCB(QueryAlgorithm):
     def __init__(
         self,
         problem: Problem,
@@ -289,15 +289,15 @@ class FNUCB(QueryAlgorithm):
         self.warm_start_model = warm_start_model
         self.previous_sols = None
         self.logger = logger
-        self.mods = None
+        self.models = None
 
-    def _optimize_dagucb(
+    def _optimize_UCBCalculator(
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, Tensor, float]:
-        dagucb = DAGUCB(self.problem, self.alpha, models)
+        UCBCalculator = UCBCalculator(self.problem, self.alpha, models)
         res = optimize.optimize(
-            fun=dagucb,
-            bounds=dagucb.bounds,
+            fun=UCBCalculator,
+            bounds=UCBCalculator.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
         )
@@ -314,21 +314,21 @@ class FNUCB(QueryAlgorithm):
     ) -> QueryResponse | None:
         if budget < self.problem.obj.total_cost():
             return None
-        self.mods = {
-            nm: gp.get_model(
+        self.models = {
+            nm: gp.fit_gp_model(
                 x,
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict()
-                    if self.warm_start_model and self.mods is not None
+                    self.models[nm].state_dict()
+                    if self.warm_start_model and self.models is not None
                     else None
                 ),
             )
             for nm, (x, y) in data.items()
             if nm != "__full__"
         }
-        result, _noise, _result_fval = self._optimize_dagucb(self.mods)
+        result, _noise, _result_fval = self._optimize_UCBCalculator(self.models)
         self.logger.debug(f"UCB Optimization result: {result=}")
 
         return QueryResponse(
@@ -342,14 +342,14 @@ class FNUCB(QueryAlgorithm):
     def get_solution(
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
-        self.mods = {
-            nm: gp.get_model(
+        self.models = {
+            nm: gp.fit_gp_model(
                 x,
                 y,
                 train_yvar=self.train_yvar,
                 state_dict=(
-                    self.mods[nm].state_dict()
-                    if self.mods is not None and self.warm_start_model
+                    self.models[nm].state_dict()
+                    if self.models is not None and self.warm_start_model
                     else None
                 ),
             )
@@ -357,15 +357,15 @@ class FNUCB(QueryAlgorithm):
             if nm != "__full__"
         }
         name2func = self.fun.name2func.copy()
-        for nm in self.mods:
+        for nm in self.models:
             func = name2func[nm]
             name2func[nm] = Function(
                 is_known=True,
-                func=gp.ExpectationFunction(self.mods[nm]),
+                func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = DAGFunction(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
         res = optimize.optimize(
             tmp_fun,
             self.problem.bounds,
@@ -441,7 +441,7 @@ class FullUCB(QueryAlgorithm):
         if budget < self.problem.obj.total_cost():
             return None
         train_X, train_Y = data["__full__"]
-        self.model = gp.get_model(
+        self.model = gp.fit_gp_model(
             train_X,
             train_Y,
             train_yvar=self.train_yvar,
@@ -474,7 +474,7 @@ class FullUCB(QueryAlgorithm):
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
         train_X, train_Y = data["__full__"]
-        self.model = gp.get_model(
+        self.model = gp.fit_gp_model(
             train_X,
             train_Y,
             train_yvar=self.train_yvar,
@@ -515,7 +515,7 @@ class FullLogEI(QueryAlgorithm):
         if budget < self.problem.obj.total_cost():
             return None
         train_X, train_Y = data["__full__"]
-        self.model = gp.get_model(
+        self.model = gp.fit_gp_model(
             train_X,
             train_Y,
             train_yvar=self.train_yvar,
@@ -557,7 +557,7 @@ class FullLogEI(QueryAlgorithm):
         self, data: dict[str, tuple[Tensor, Tensor]]
     ) -> tuple[Tensor, float]:
         train_X, train_Y = data["__full__"]
-        self.model = gp.get_model(
+        self.model = gp.fit_gp_model(
             train_X,
             train_Y,
             train_yvar=self.train_yvar,

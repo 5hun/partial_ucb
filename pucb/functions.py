@@ -12,7 +12,7 @@ import networkx as nx
 @dataclass(frozen=True)
 class Function:
     is_known: bool
-    func: Callable[[Tensor], Tensor]
+    func: Callable[[Tensor], Tensor] | None
     in_ndim: int
     out_ndim: int
     cost: None | int = None
@@ -28,12 +28,15 @@ class Function:
         if self.is_known and self.cost is not None:
             raise ValueError("cost of known function should be None")
 
+        if self.is_known and self.func is None:
+            raise ValueError("known function should have a valid function")
+
         # unknown function should have cost
         if not self.is_known and self.cost is None:
             raise ValueError("cost of unknown function should not be None")
 
 
-class DAGFunction:
+class FunctionNetwork:
     def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph):
         assert (
             "__full__" not in name2func
@@ -44,15 +47,6 @@ class DAGFunction:
 
     def eval_sub(self, name: str, x: Float[Tensor, "n d"]) -> Float[Tensor, "n d2"]:
         return self.name2func[name].func(x)
-
-    def get_output_node_name(self) -> str:
-        no_out_deg_node = [
-            node for node in self.dag.nodes if self.dag.out_degree(node) == 0
-        ]
-        assert (
-            len(no_out_deg_node) == 1
-        ), "There should be only one node with no out degree"
-        return no_out_deg_node[0]
 
     def get_input_index(self, node: str) -> list[tuple[str, int, int]]:
         inputs = []
@@ -163,6 +157,6 @@ class ObjectiveSense(Enum):
 
 @dataclass
 class Problem:
-    obj: DAGFunction
+    obj: FunctionNetwork
     sense: ObjectiveSense
     bounds: Float[Tensor, "2 d"]

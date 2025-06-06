@@ -34,7 +34,7 @@ def ucb(mod: SingleTaskGP, x: Tensor, alpha: Tensor) -> Tensor:
     return mean + alpha * std
 
 
-def get_model(
+def fit_gp_model(
     train_x: Float[Tensor, "n d"],
     train_y: Float[Tensor, "n 1"],
     train_yvar: float | None = None,
