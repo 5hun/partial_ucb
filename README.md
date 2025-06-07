@@ -1,18 +1,16 @@
 # partial_ucb
 
-- [partial\_ucb](#partial_ucb)
-  - [Overview](#overview)
-  - [Problem Definition](#problem-definition)
-  - [Algorithm](#algorithm)
-    - [Definition of $r\_j(x)$](#definition-of-r_jx)
-  - [Usage](#usage)
-  - [TODO](#todo)
-  - [References](#references)
+- [Overview](#overview)
+- [Problem Definition](#problem-definition)
+- [Algorithm](#algorithm)
+- [Usage](#usage)
+- [TODO](#todo)
+- [References](#references)
 
 
 ## Overview
 
-This repository proposes an algorithm for efficient optimization using partial information in black-box function optimization.
+This repository proposes an algorithm for efficient optimization using partial evaluation in black-box function optimization.
 The aim of this algorithm is to optimize the final objective function while minimizing the number of evaluations of the black-box function.
 
 ## Problem Definition
@@ -36,13 +34,20 @@ Also, $I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1)$.
 
 Each $f_i (i=1,\dots, n)$ is classified into one of the following:
 
-- Function values and gradients of $f_i$ can be evaluated at low cost.
-- $f_i$ is a black-box function where only function values can be evaluated at high cost. Gradients cannot be computed.
+<dl>
+   <dt>Known functions</dt>
+   <dd>
+      A function whose values and gradients can be evaluated at low cost.
+   </dd>
+   <dt>Black-box functions</dt>
+   <dd>
+      A function whose values can be evaluated at high cost, but gradients cannot be computed.
+   </dd>
+</dl>
 
 Let $F_B$ be the set of $f_i$ that are black-box functions, and let $I_B$ be the set of indices corresponding to these black-box functions, that is, $I_B = \{ i \mid f_i \in F_B \}$.
 
-Under these conditions, we want to optimize $f$.
-Since evaluating a black-box function $f_i$ is costly, we want to minimize the number of evaluations of these black-box functions while performing optimization.
+Under these conditions, we aim to optimize $f$. However, evaluating $f$ is costly due to the black-box functions it contains. Therefore, we aim to optimize $f$ while minimizing evaluation costs by individually evaluating each $f_i \in F_B$ that comprises $f$.
 
 ## Algorithm
 
@@ -68,11 +73,10 @@ We propose the following algorithm for the above problem:
 $r_j$ is defined as follows:
 
 $$
-r_j := \left(\frac{\partial \bar{f}(x^\ast)}{\partial \bar{f_{i_j}}(x^\ast)} \right)^2 \cdot \sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))
+r_j := \frac{1}{c_j} \left(\frac{\partial \bar{f}(x^\ast)}{\partial \bar{f_{i_j}}(x^\ast)} \right)^2 \cdot \sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))
 $$
 
-Here, $\bar{f}(x)$ is $f$ defined using $\bar{f}_i$ instead of $f \in F_B$.
-Also, $\sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))$ is the variance of $\bar{f}_{i_j}(I_j(x^\ast))$ represented by the Gaussian process.
+Here, $\bar{f}(x)$ is $f$ defined using $\bar{f}_i$ instead of $f \in F_B$, $c_j$ is the evaluation cost of $f_{i_j}(I_j(x))$. Also, $\sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))$ is the variance of $\bar{f}_{i_j}(I_j(x^\ast))$ represented by the Gaussian process.
 
 In other words, $r_j$ is the product of the uncertainty (standard deviation) of $f_{i_j}(I_j(x))$ and its impact on the final objective function value (gradient).
 
