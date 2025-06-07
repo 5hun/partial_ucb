@@ -7,7 +7,7 @@ import torch
 from torch import Tensor
 
 from . import util
-from .functions import ObjectiveSense
+from .problem import ObjectiveSense
 
 
 def optimize(

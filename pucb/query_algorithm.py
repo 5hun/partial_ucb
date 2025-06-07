@@ -7,7 +7,7 @@ from torch import Tensor
 
 import botorch
 
-from .functions import FunctionNetwork, Function, Problem, ObjectiveSense
+from .problem import FunctionNetwork, Function, Problem, ObjectiveSense
 from . import gp, optimize, util
 
 
@@ -57,7 +57,7 @@ class UCBCalculator:
         noise_info = {}
         for v in self.fun.dag.nodes:
             funcname = self.fun.dag.nodes[v]["func"]
-            func = self.fun.name2func[funcname]
+            func = self.fun.functions[funcname]
             if not func.is_known:
                 noise_info[v] = (index, index + func.out_ndim)
                 index += func.out_ndim
@@ -83,7 +83,7 @@ class UCBCalculator:
         y = torch.cat(y, dim=-1)
 
         func_name: str = self.fun.dag.nodes[node]["func"]
-        func = self.fun.name2func[func_name]
+        func = self.fun.functions[func_name]
         if func.is_known:
             res = self.fun.eval_sub(func_name, y)
         else:
@@ -108,6 +108,25 @@ class UCBCalculator:
 
 
 class PartialUCB(QueryAlgorithm):
+    r"""
+    Partial-UCB strategy
+
+    Parameters
+    ----------
+    problem : Problem
+        The optimization problem to solve.
+    alpha : float
+        The exploration parameter for UCB.
+    warm_start_model : bool
+        Whether to warm start the GP model with the previous state when hyperparameter tuning.
+    train_yvar : float, optional
+        The estimated variance of the observation noise for training the GP model.
+        Default is 1e-5.
+    logger : logging.Logger, optional
+        Logger for debugging and information messages. If None, a default logger is used.
+
+    """
+
     def __init__(
         self,
         problem: Problem,
@@ -166,22 +185,22 @@ class PartialUCB(QueryAlgorithm):
         result, _noise, _result_fval = self._optimize_UCBCalculator(self.models)
         self.logger.debug(f"UCB Optimization result: {result=}")
 
-        name2func = self.fun.name2func.copy()
+        functions = self.fun.functions.copy()
         for nm in self.models:
-            func = name2func[nm]
-            name2func[nm] = Function(
+            func = functions[nm]
+            functions[nm] = Function(
                 is_known=True,
                 func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(functions, self.fun.dag)
 
         eval_cache = tmp_fun.eval(result)
         res_node = tmp_fun.get_output_node()
 
-        for nm in self.fun.name2func:
-            func = self.fun.name2func[nm]
+        for nm in self.fun.functions:
+            func = self.fun.functions[nm]
             if func.is_known:
                 continue
             tmp_res = eval_cache[nm]
@@ -193,8 +212,8 @@ class PartialUCB(QueryAlgorithm):
 
         best_r = float("-inf")
         best_response = None
-        for nm in self.fun.name2func:
-            func = self.fun.name2func[nm]
+        for nm in self.fun.functions:
+            func = self.fun.functions[nm]
             if func.is_known:
                 continue
             assert func.cost is not None
@@ -237,16 +256,16 @@ class PartialUCB(QueryAlgorithm):
             for nm, (x, y) in data.items()
             if nm != "__full__"
         }
-        name2func = self.fun.name2func.copy()
+        functions = self.fun.functions.copy()
         for nm in self.models:
-            func = name2func[nm]
-            name2func[nm] = Function(
+            func = functions[nm]
+            functions[nm] = Function(
                 is_known=True,
                 func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(functions, self.fun.dag)
         res = optimize.optimize(
             tmp_fun,
             self.problem.bounds,
@@ -300,10 +319,10 @@ class FunctionNetworkUCB(QueryAlgorithm):
     def _optimize_UCBCalculator(
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, Tensor, float]:
-        UCBCalculator = UCBCalculator(self.problem, self.alpha, models)
+        ucb_calc = UCBCalculator(self.problem, self.alpha, models)
         res = optimize.optimize(
-            fun=UCBCalculator,
-            bounds=UCBCalculator.bounds,
+            fun=ucb_calc,
+            bounds=ucb_calc.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
         )
@@ -362,16 +381,16 @@ class FunctionNetworkUCB(QueryAlgorithm):
             for nm, (x, y) in data.items()
             if nm != "__full__"
         }
-        name2func = self.fun.name2func.copy()
+        functions = self.fun.functions.copy()
         for nm in self.models:
-            func = name2func[nm]
-            name2func[nm] = Function(
+            func = functions[nm]
+            functions[nm] = Function(
                 is_known=True,
                 func=gp.ExpectationFunction(self.models[nm]),
                 in_ndim=func.in_ndim,
                 out_ndim=func.out_ndim,
             )
-        tmp_fun = FunctionNetwork(name2func, self.fun.dag)
+        tmp_fun = FunctionNetwork(functions, self.fun.dag)
         res = optimize.optimize(
             tmp_fun,
             self.problem.bounds,

@@ -37,16 +37,16 @@ class Function:
 
 
 class FunctionNetwork:
-    def __init__(self, name2func: dict[str, Function], dag: nx.DiGraph):
+    def __init__(self, functions: dict[str, Function], dag: nx.DiGraph):
         assert (
-            "__full__" not in name2func
+            "__full__" not in functions
         ), "objective function should not have the function name '__full__'"
 
-        self.name2func = name2func
+        self.functions = functions
         self.dag = dag
 
     def eval_sub(self, name: str, x: Float[Tensor, "n d"]) -> Float[Tensor, "n d2"]:
-        return self.name2func[name].func(x)
+        return self.functions[name].func(x)
 
     def get_input_index(self, node: str) -> list[tuple[str, int, int]]:
         inputs = []
@@ -128,14 +128,14 @@ class FunctionNetwork:
         return self.eval(x)[self.get_output_node()]
 
     def get_cost(self, name: str) -> int:
-        func = self.name2func[name]
+        func = self.functions[name]
         return getattr(func, "cost", 0)
 
     def available_funcs(self, budget: int) -> list[str]:
         available = []
         for node in self.dag.nodes:
             func_name = self.dag.nodes[node]["func"]
-            func = self.name2func[func_name]
+            func = self.functions[func_name]
             if func.cost is not None and func.cost <= budget:
                 available.append(func_name)
         return available
@@ -144,7 +144,7 @@ class FunctionNetwork:
         total_cost = 0
         for node in self.dag.nodes:
             func_name = self.dag.nodes[node]["func"]
-            func = self.name2func[func_name]
+            func = self.functions[func_name]
             if func.cost is not None:
                 total_cost += func.cost
         return total_cost

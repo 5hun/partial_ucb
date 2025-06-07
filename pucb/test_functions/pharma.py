@@ -10,7 +10,7 @@ from jaxtyping import Float
 from torch import Tensor
 import networkx as nx
 
-from ..functions import Function, FunctionNetwork, Problem, ObjectiveSense
+from ..problem import Function, FunctionNetwork, Problem, ObjectiveSense
 
 
 def simple_nn(
@@ -72,7 +72,7 @@ def f3(x: Float[Tensor, "n 2"]) -> Float[Tensor, "n 1"]:
 
 
 def get_pharma() -> Problem:
-    name2func = {
+    functions = {
         "f1": Function(func=f1, is_known=False, in_ndim=4, out_ndim=1, cost=1),
         "f2": Function(func=f2, is_known=False, in_ndim=4, out_ndim=1, cost=49),
         "f3": Function(func=f3, is_known=True, in_ndim=2, out_ndim=1),
@@ -90,7 +90,7 @@ def get_pharma() -> Problem:
     )
 
     return Problem(
-        obj=FunctionNetwork(name2func=name2func, dag=dag),
+        obj=FunctionNetwork(functions=functions, dag=dag),
         sense=ObjectiveSense.MAXIMIZE,
         bounds=bounds,
     )

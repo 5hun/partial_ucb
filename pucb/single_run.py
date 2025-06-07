@@ -14,7 +14,7 @@ import tomli_w
 import matplotlib
 from matplotlib import pyplot as plt
 
-from . import util, functions, query_algorithm
+from . import problem, util, query_algorithm
 from .test_functions import ackley, norm, pharma, freesolv3
 
 
@@ -77,7 +77,7 @@ def setup_logging(output_dir: Path, log_level: str):
 
 def run_experiment(
     method: query_algorithm.QueryAlgorithm,
-    problem: functions.Problem,
+    problem: problem.Problem,
     config: dict,
     logger: logging.Logger,
 ):
@@ -95,7 +95,7 @@ def run_experiment(
     initial_result = problem.obj.eval(initial_samples)
     initial_cost = 0
     data = {}
-    for nm, func in problem.obj.name2func.items():
+    for nm, func in problem.obj.functions.items():
         if func.is_known:
             continue
         tmp_input = problem.obj.get_input_tensor(nm, initial_result, initial_samples)
@@ -196,7 +196,7 @@ def run_experiment(
                 "result": {},
             }
 
-            for nm, func in problem.obj.name2func.items():
+            for nm, func in problem.obj.functions.items():
                 if func.is_known:
                     continue
                 tmp_input = problem.obj.get_input_tensor(nm, res, query.input)

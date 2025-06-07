@@ -12,7 +12,7 @@ import networkx as nx
 import polars as pl
 
 from .. import gp
-from ..functions import Function, FunctionNetwork, Problem, ObjectiveSense
+from ..problem import Function, FunctionNetwork, Problem, ObjectiveSense
 
 
 def get_freesolv3(cost1: int, cost2: int) -> Problem:
@@ -27,7 +27,7 @@ def get_freesolv3(cost1: int, cost2: int) -> Problem:
 
     mod1 = gp.fit_gp_model(train_x=train_X1, train_y=train_Y1)
     mod2 = gp.fit_gp_model(train_x=train_Y1, train_y=train_Y2)
-    name2func = {
+    functions = {
         "f1": Function(
             func=gp.ExpectationFunction(mod1),
             is_known=False,
@@ -54,7 +54,7 @@ def get_freesolv3(cost1: int, cost2: int) -> Problem:
     )
 
     return Problem(
-        obj=FunctionNetwork(name2func=name2func, dag=dag),
+        obj=FunctionNetwork(functions=functions, dag=dag),
         sense=ObjectiveSense.MAXIMIZE,
         bounds=bounds,
     )
