@@ -112,9 +112,9 @@ class PartialUCB(QueryAlgorithm):
         self,
         problem: Problem,
         alpha: float,
-        logger: logging.Logger,
         warm_start_model: bool,
         train_yvar: float = 1e-5,
+        logger: logging.Logger | None = None,
     ):
         self.problem = problem
         self.fun = problem.obj
@@ -122,16 +122,19 @@ class PartialUCB(QueryAlgorithm):
         self.train_yvar = train_yvar
         self.warm_start_model = warm_start_model
         self.previous_sols = None
-        self.logger = logger
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
         self.models = None
 
     def _optimize_UCBCalculator(
         self, models: dict[str, botorch.models.SingleTaskGP]
     ) -> tuple[Tensor, Tensor, float]:
-        UCBCalculator = UCBCalculator(self.problem, self.alpha, models)
+        ucb_calc = UCBCalculator(self.problem, self.alpha, models)
         res = optimize.optimize(
-            fun=UCBCalculator,
-            bounds=UCBCalculator.bounds,
+            fun=ucb_calc,
+            bounds=ucb_calc.bounds,
             num_initial_samples=100,
             sense=self.problem.sense,
         )
@@ -278,9 +281,9 @@ class FunctionNetworkUCB(QueryAlgorithm):
         self,
         problem: Problem,
         alpha: float,
-        logger: logging.Logger,
         warm_start_model: bool,
         train_yvar: float = 1e-5,
+        logger: logging.Logger | None = None,
     ):
         self.problem = problem
         self.fun = problem.obj
@@ -288,7 +291,10 @@ class FunctionNetworkUCB(QueryAlgorithm):
         self.train_yvar = train_yvar
         self.warm_start_model = warm_start_model
         self.previous_sols = None
-        self.logger = logger
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
         self.models = None
 
     def _optimize_UCBCalculator(
@@ -396,7 +402,11 @@ class FunctionNetworkUCB(QueryAlgorithm):
 
 
 class Random(QueryAlgorithm):
-    def __init__(self, problem: Problem, logger: logging.Logger):
+    def __init__(self, problem: Problem, logger: logging.Logger | None = None):
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
         self.problem = problem
 
     def step(
@@ -500,15 +510,18 @@ class FullLogEI(QueryAlgorithm):
     def __init__(
         self,
         problem: Problem,
-        logger: logging.Logger,
         warm_start_model: bool,
         train_yvar: float = 1e-5,
+        logger: logging.Logger | None = None,
     ):
         self.problem = problem
         self.fun = problem.obj
         self.train_yvar = train_yvar
         self.warm_start_model = warm_start_model
-        self.logger = logger
+        if logger is None:
+            self.logger = logging.getLogger(__name__)
+        else:
+            self.logger = logger
         self.model = None
 
     def step(self, data: dict, budget: int) -> QueryResponse | None:
