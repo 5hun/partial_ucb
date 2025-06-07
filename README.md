@@ -1,76 +1,89 @@
 # partial_ucb
 
 - [partial\_ucb](#partial_ucb)
-  - [概要](#概要)
-  - [問題設定](#問題設定)
-  - [アルゴリズム](#アルゴリズム)
-    - [$r\_j(x)$の定義](#r_jxの定義)
-  - [実験内容](#実験内容)
-  - [使用方法](#使用方法)
+  - [Overview](#overview)
+  - [Problem Definition](#problem-definition)
+  - [Algorithm](#algorithm)
+    - [Definition of $r\_j(x)$](#definition-of-r_jx)
+  - [Usage](#usage)
+  - [TODO](#todo)
+  - [References](#references)
 
 
-## 概要
+## Overview
 
-## 問題設定
+This repository proposes an algorithm for efficient optimization using partial information in black-box function optimization.
+The aim of this algorithm is to optimize the final objective function while minimizing the number of evaluations of the black-box function.
 
-以下のような問題を考える。
-目的関数$f : X \to \mathbb{R}$が与えられたとする。
-定義域$X$は$X = \prod_{i=1}^2 [l_i, u_i]$とする。
+## Problem Definition
 
-$f$はいくつかの関数の集合$f_i: \mathbb{R}^{k_i} \to \mathbb{R}^{l_i}$の合成として表現される。
-$F = \{f_1, \dots, f_m\}$とする。
-$g_j \in F (j=1,\dots, m)$は$F$のいずれかに関数に対応する。
-$g_m$は最終的な$f$の出力を表す。
-$O_j(x)$は$x\in X$を入力とした時の$g_j$の出力を表す。
-そして、$I_j(x)$は$x$を入力としたときの$g_j$の入力を表す。$I_j(x)$の要素は$x$の一部または$O_k(x) (k \neq j)$の一部を表す
-また、$g_j$に対応する$f_i$を$f_{i_j}$とする。
+Consider the following problem:
+Let $f : X \to \mathbb{R}$ be an objective function.
+The domain $X$ is defined as $X = \prod_{i=1}^2 [l_i, u_i]$.
 
-例えば、$f(x) = \sin(x_1) + \cos(x_2)$のような関数を考える。
-すると、$f_1(x) = \sin(x)$, $f_2(x) = \cos(x)$, $f_3(x_1, x_2) = x_1 + x_2$であり、
-$g_1 = f_1$, $g_2 = f_2$, $g_3 = f_3$とする。
-また、$I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1)$となる。
+$f$ is represented as a composition of multiple functions $f_i: \mathbb{R}^{k_i} \to \mathbb{R}$.
+Let $F = \{f_1, \dots, f_m\}$.
+$g_j \in F (j=1,\dots, m)$ corresponds to one of the functions in $F$.
+$g_m$ represents the final output of $f$.
+$O_j(x)$ represents the output of $g_j$ when the input is $x \in X$.
+And $I_j(x)$ represents the input to $g_j$ when the input is $x$. The elements of $I_j(x)$ represent either parts of $x$ or parts of $O_k(x) (k \neq j)$.
+Also, let $f_{i_j}$ be the function $f_i$ that corresponds to $g_j$.
 
-各$f_i (i=1,\dots, n)$は以下のいずれかに分けられるとする。
+For example, consider a function like $f(x) = \sin(x_1) + \cos(x_2)$.
+In this case, $f_1(x) = \sin(x)$, $f_2(x) = \cos(x)$, $f_3(x_1, x_2) = x_1 + x_2$, and
+$g_1 = f_1$, $g_2 = f_2$, $g_3 = f_3$.
+Also, $I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1)$.
 
-- $f_i$の関数値の評価や勾配の計算が低コストで可能である。
-- $f_i$はブラックボックス関数であり、高いコストで関数値の評価のみ可能である。勾配は計算できない。
+Each $f_i (i=1,\dots, n)$ is classified into one of the following:
 
-また、ブラックボックス関数であるような$f_i$の集合を$F_B$とする。
+- Function values and gradients of $f_i$ can be evaluated at low cost.
+- $f_i$ is a black-box function where only function values can be evaluated at high cost. Gradients cannot be computed.
 
-このような問題設定の下で、$f$を最適化したい。
-$f_i$が評価が高コストなブラックボックス関数であるので、
-ブラックボックスな$f_i$の評価回数をできる限り抑えながら最適化を行いたい。
+Let $F_B$ be the set of $f_i$ that are black-box functions.
 
-## アルゴリズム
+Under these conditions, we want to optimize $f$.
+Since evaluating a black-box function $f_i$ is costly, we want to minimize the number of evaluations of these black-box functions while performing optimization.
 
-上記の問題に対して以下のようなアルゴリズムを提案する。
+## Algorithm
 
-1. 初期データの収集
-   1. 各$f_i \in F_B$の定義域からランダムに一定個数サンプリングして$f_i$の評価を行う。評価した結果のデータを$D_i = \{(x_k, f_i(x_k))\}_{k=1}^{n_i}$とする。
-2. 適応的データ収集
-   1. UCBを用いた場合の解を求める。
-      1. $f_i \in F_B$に対してデータ$D_i$を用いてガウス過程を当てはめる。そしてUCBを返す関数を$\hat{f}_i$とおく。
-      2. $f_i \in F_B$の代わりに$\hat{f}_i$を用いて、$f$の最適化を行う。得られた解を$x^*$とする。
-      3. 各$f_{i_j}(I_j(x^\ast))$に対して後述する$r_j(x^\ast)$を計算する。
-      4. $r_j(x^*)$が最大となるような$f_{i_j}(I_j(x^\ast))$を評価する。評価した結果は$D_{i_j}$に追加する。
-3. 解の出力
-   1. 各$f_i \in F_B$に対して$D_i$を用いてガウス過程を当てはめる。当てはめた結果の関数を$\bar{f}_i$とする。
-   2. $f_i \in F_B$の代わりに$\bar{f}_i$を用いて、$f$の最適化を行う。得られた解を$x^*$とする。
-   3. $x^*$を出力する。
+We propose the following algorithm for the above problem:
 
-### $r_j(x)$の定義
+1. Initial data collection
+   1. For each $f_i \in F_B$, randomly sample a certain number of points from its domain and evaluate $f_i$. Let the evaluated data be $D_i = \{(x_k, f_i(x_k))\}_{k=1}^{n_i}$.
+2. Adaptive data collection
+   1. Find a solution using UCB.
+      1. For each $f_i \in F_B$, fit a Gaussian process $g_i$ using the data $D_i$.
+         - Let $\mu_i$ and $\sigma_i^2$ be the mean function and variance function of $g_i$ respectively.
+         - Define $\hat{f}_i(x_i, z_i) := \mu_i(x) + z_i \sigma_i^2(x_i)$.
+      3. Optimize $f$ using $\hat{f}_i$ instead of $f_i \in F_B$, optimizing over $x$ and $z_i \ (i \in I_B)$. Let the obtained solution be $x^\ast, z^\ast$.
+      4. Calculate $r_j(x^\ast)$ (defined below) for each $f_{i_j}(I_j(x^\ast))$.
+      5. Evaluate $f_{i_j}(I_j(x^\ast))$ that maximizes $r_j(x^*)$. Add the evaluation result to $D_{i_j}$.
+3. Output solution
+   1. For each $f_i \in F_B$, fit a Gaussian process using $D_i$. Let the resulting function be $\bar{f}_i$.
+   2. Optimize $f$ using $\bar{f}_i$ instead of $f_i \in F_B$. Let the obtained solution be $x^*$.
+   3. Output $x^\ast$.
 
-$r_j$は以下のように定義される。
+### Definition of $r_j(x)$
+
+$r_j$ is defined as follows:
 
 $$
-r_j := \frac{\partial \bar{f}(x^\ast)}{\partial \bar{f_{i_j}}(x^\ast)} \cdot 2 \sigma(\bar{f}_{i_j}(I_j(x^\ast)))
+r_j := \left(\frac{\partial \bar{f}(x^\ast)}{\partial \bar{f_{i_j}}(x^\ast)} \right)^2 \cdot \sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))
 $$
 
-ここで、$\bar{f}(x)$を$f \in F_B$の代わりに$\bar{f}_i$を用いて定義された$f$とする。
-また、$\sigma(\bar{f}_{i_j}(I_j(x^\ast)))$はガウス過程で表現された$\bar{f}_{i_j}(I_j(x^\ast))$の標準偏差である。
+Here, $\bar{f}(x)$ is $f$ defined using $\bar{f}_i$ instead of $f \in F_B$.
+Also, $\sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))$ is the variance of $\bar{f}_{i_j}(I_j(x^\ast))$ represented by the Gaussian process.
 
-つまり、$r_j$は$f_{i_j}(I_j(x))$の不確実性（標準偏差）と、最終的な目的関数値への影響（勾配）の積となっている。
+In other words, $r_j$ is the product of the uncertainty (standard deviation) of $f_{i_j}(I_j(x))$ and its impact on the final objective function value (gradient).
 
-## 実験内容
+## Usage
 
-## 使用方法
+An example of usage is available in `src/example.ipynb`.
+
+## TODO
+
+- Comparison with partial-KGFN [1]
+
+## References
+
+- [1] [Buathong, Poompol, et al. "Bayesian Optimization of Function Networks with Partial Evaluations." International Conference on Machine Learning. PMLR, 2024.](https://proceedings.mlr.press/v235/buathong24a.html)
