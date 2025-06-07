@@ -10,7 +10,7 @@ from jaxtyping import Float
 from torch import Tensor
 import networkx as nx
 
-from ..functions import Function, DAGFunction, Problem, ObjectiveSense
+from ..functions import Function, FunctionNetwork, Problem, ObjectiveSense
 
 
 def simple_nn(
@@ -90,7 +90,7 @@ def get_pharma() -> Problem:
     )
 
     return Problem(
-        obj=DAGFunction(name2func=name2func, dag=dag),
+        obj=FunctionNetwork(name2func=name2func, dag=dag),
         sense=ObjectiveSense.MAXIMIZE,
         bounds=bounds,
     )

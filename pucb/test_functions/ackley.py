@@ -13,7 +13,7 @@ from torch import Tensor
 import networkx as nx
 import numpy as np
 
-from ..functions import Function, DAGFunction, Problem, ObjectiveSense
+from ..functions import Function, FunctionNetwork, Problem, ObjectiveSense
 
 
 def original_ackley(a: float, b: float, c: float, x: Float[Tensor, "n d"]) -> Tensor:
@@ -51,7 +51,7 @@ def get_ackley(ndim: int, cost1: int, cost2: int) -> Problem:
     )
 
     return Problem(
-        obj=DAGFunction(name2func=name2func, dag=dag),
+        obj=FunctionNetwork(name2func=name2func, dag=dag),
         sense=ObjectiveSense.MAXIMIZE,
         bounds=bounds,
     )

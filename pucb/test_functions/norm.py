@@ -1,7 +1,7 @@
 import torch
 import networkx as nx
 
-from ..functions import Function, DAGFunction, Problem, ObjectiveSense
+from ..functions import Function, FunctionNetwork, Problem, ObjectiveSense
 
 
 def get_norm(ndim: int, p: int) -> Problem:
@@ -20,7 +20,7 @@ def get_norm(ndim: int, p: int) -> Problem:
         [[-1.0 for _ in range(ndim)], [1.0 for _ in range(ndim)]], dtype=torch.double
     )
     return Problem(
-        obj=DAGFunction(name2func=name2func, dag=dag),
+        obj=FunctionNetwork(name2func=name2func, dag=dag),
         sense=ObjectiveSense.MINIMIZE,
         bounds=bounds,
     )
