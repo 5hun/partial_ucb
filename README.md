@@ -39,7 +39,7 @@ Each $f_i (i=1,\dots, n)$ is classified into one of the following:
 - Function values and gradients of $f_i$ can be evaluated at low cost.
 - $f_i$ is a black-box function where only function values can be evaluated at high cost. Gradients cannot be computed.
 
-Let $F_B$ be the set of $f_i$ that are black-box functions.
+Let $F_B$ be the set of $f_i$ that are black-box functions, and let $I_B$ be the set of indices corresponding to these black-box functions, that is, $I_B = \{ i \mid f_i \in F_B \}$.
 
 Under these conditions, we want to optimize $f$.
 Since evaluating a black-box function $f_i$ is costly, we want to minimize the number of evaluations of these black-box functions while performing optimization.
@@ -78,7 +78,7 @@ In other words, $r_j$ is the product of the uncertainty (standard deviation) of 
 
 ## Usage
 
-An example of usage is available in `src/example.ipynb`.
+An example of usage is available in `examples/example.ipynb`.
 
 ## TODO
 
