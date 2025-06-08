@@ -78,7 +78,7 @@ $$
 r_j := \frac{1}{c_j} \left(\frac{\partial \bar{f}(x^\ast)}{\partial \bar{f_{i_j}}(x^\ast)} \right)^2 \cdot \sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))
 $$
 
-Here, $\bar{f}(x)$ is $f$ defined using $\bar{f}_i$ instead of $f \in F_B$, $c_j$ is the evaluation cost of $f_{i_j}(I_j(x))$. Also, $\sigma^2(\bar{f}_{i_j}(I_j(x^\ast)))$ is the variance of $\bar{f}_{i_j}(I_j(x^\ast))$ represented by the Gaussian process.
+Here, $\bar{f}(x)$ is $f$ defined using $\bar{f}\_i$ instead of $f \in F_B$, $c_j$ is the evaluation cost of $f_{i_j}(I_j(x))$. Also, $\sigma^2(\bar{f}\_{i_j}(I_j(x^\ast)))$ is the variance of $\bar{f}_{i_j}(I_j(x^\ast))$ represented by the Gaussian process.
 
 In other words, $r_j$ is the product of the uncertainty (standard deviation) of $f_{i_j}(I_j(x))$ and its impact on the final objective function value (gradient).
 
