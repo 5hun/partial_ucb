@@ -32,7 +32,7 @@ In this case, $f_1(x) = \sin(x)$, $f_2(x) = \cos(x)$, $f_3(x_1, x_2) = x_1 + x_2
 $g_1 = f_1$, $g_2 = f_2$, $g_3 = f_3$.
 Also, $I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1)$.
 
-Each $f_i (i=1,\dots, n)$ is classified into one of the following:
+Each $f_i (i=1,\dots, m)$ is classified into one of the following:
 
 <dl>
    <dt>Known functions</dt>
@@ -56,16 +56,18 @@ We propose the following algorithm for the above problem:
 1. Initial data collection
    1. For each $f_i \in F_B$, randomly sample a certain number of points from its domain and evaluate $f_i$. Let the evaluated data be $D_i = \{(x_k, f_i(x_k))\}_{k=1}^{n_i}$.
 2. Adaptive data collection
-   1. Find a solution using UCB.
-      1. For each $f_i \in F_B$, fit a Gaussian process $g_i$ using the data $D_i$.
-         - Let $\mu_i$ and $\sigma_i^2$ be the mean function and variance function of $g_i$ respectively.
-         - Define $\hat{f}_i(x_i, z_i) := \mu_i(x) + z_i \sigma_i^2(x_i)$.
-      3. Optimize $f$ using $\hat{f}_i$ instead of $f_i \in F_B$, optimizing over $x$ and $z_i \ (i \in I_B)$. Let the obtained solution be $x^\ast, z^\ast$.
-      4. Calculate $r_j(x^\ast)$ (defined below) for each $f_{i_j}(I_j(x^\ast))$.
-      5. Evaluate $f_{i_j}(I_j(x^\ast))$ that maximizes $r_j(x^*)$. Add the evaluation result to $D_{i_j}$.
+
+   Iterate the following steps until the evaluation budget is exhausted:
+
+   1. For each $f_i \in F_B$, fit a Gaussian process $GP_i$ using the data $D_i$.
+   2. Define $\hat{f}_i(x_i, z_i) := \mu_i(x) + z_i \sigma_i^2(x_i)$, where $\mu_i$ and $\sigma_i^2$ are the mean and variance functions of $GP_i$.
+   3. Optimize $f$ using $\hat{f}_i$ instead of $f_i \in F_B$ over $x$ and $z_i \ (i \in I_B)$. Let the obtained solution be $x^\ast, z^\ast$.
+   4. Calculate $r_j(x^\ast)$ (defined below) for each $f_{i_j}(I_j(x^\ast))$.
+   5. Evaluate $f_{i_j}(I_j(x^\ast))$ that maximizes $r_j(x^\ast)$. Add the evaluation result to $D_{i_j}$.
+
 3. Output solution
    1. For each $f_i \in F_B$, fit a Gaussian process using $D_i$. Let the resulting function be $\bar{f}_i$.
-   2. Optimize $f$ using $\bar{f}_i$ instead of $f_i \in F_B$. Let the obtained solution be $x^*$.
+   2. Optimize $f$ using $\bar{f}_i$ instead of $f_i \in F_B$. Let the obtained solution be $x^\ast$.
    3. Output $x^\ast$.
 
 ### Definition of $r_j(x)$
