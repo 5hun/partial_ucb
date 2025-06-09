@@ -1,5 +1,3 @@
-/.vscode
 *.pyc
 uv.lock
-/output
 .python-version
