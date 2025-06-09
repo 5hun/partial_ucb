@@ -17,7 +17,7 @@ The aim of this algorithm is to optimize the final objective function while mini
 
 Consider the following problem:
 Let $f : X \to \mathbb{R}$ be an objective function.
-The domain $X$ is defined as $X = \prod_{i=1}^2 [l_i, u_i]$.
+The domain $X$ is defined as $X = \prod_{i=1}^n [l_i, u_i]$.
 
 $f$ is represented as a composition of multiple functions $f_i: \mathbb{R}^{k_i} \to \mathbb{R}$.
 Let $F = \{f_1, \dots, f_m\}$.
