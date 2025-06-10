@@ -7,6 +7,7 @@ from functools import partial
 import tomli_w
 from tqdm import tqdm
 import polars as pl
+import matplotlib
 from matplotlib import pyplot as plt
 import seaborn as sns
 
@@ -100,6 +101,8 @@ def create_all_plots(
             .cast(pl.Int64)
         )
 
+    matplotlib.use("Agg")
+
     for p in tqdm(sorted(df["problem"].unique()), desc="Plotting"):
         sub_df = df.filter(pl.col("problem") == p)
 
@@ -131,13 +134,12 @@ def create_all_plots(
         )
 
         # Plot 1: cost vs obj
-        sns.relplot(
+        ax = sns.relplot(
             data=filled_data.to_pandas(),
             x="cumulative_cost",
             y="obj",
             hue="method",
             kind="line",
-            aspect=2,
             errorbar=("se", 2),
         )
         plt.title(f"Problem {p}")
@@ -148,13 +150,8 @@ def create_all_plots(
         plt.close()
 
         # Plot 2: iter vs obj
-        sns.relplot(
-            data=sub_df.to_pandas(),
-            x="iter",
-            y="obj",
-            hue="method",
-            kind="line",
-            aspect=2,
+        ax = sns.relplot(
+            data=sub_df.to_pandas(), x="iter", y="obj", hue="method", kind="line"
         )
         plt.title(f"Problem {p}")
         plt.xlabel("Iteration")
@@ -164,13 +161,12 @@ def create_all_plots(
         plt.close()
 
         # Plot 3: iter vs cost
-        sns.relplot(
+        ax = sns.relplot(
             data=sub_df.to_pandas(),
             x="iter",
             y="cumulative_cost",
             hue="method",
             kind="line",
-            aspect=2,
         )
         plt.title(f"Problem {p}")
         plt.xlabel("Iteration")
@@ -181,7 +177,7 @@ def create_all_plots(
 
 
 if __name__ == "__main__":
-    base_output_dir = Path("output/experiments_tmp")
+    base_output_dir = Path("output/experiments")
 
     num_parallel = 6
 
@@ -198,16 +194,16 @@ if __name__ == "__main__":
         #     "function_config": {"ndim": 2, "cost1": 1, "cost2": 1},
         #     "num_initial_samples": 5,
         # },
-        "ackley_6d_1_1": {
-            "function": "ackley",
-            "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
-            "num_initial_samples": 13,
-        },
-        "ackley_6d_1_9": {
-            "function": "ackley",
-            "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
-            "num_initial_samples": 13,
-        },
+        # "ackley_6d_1_1": {
+        #     "function": "ackley",
+        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 1},
+        #     "num_initial_samples": 13,
+        # },
+        # "ackley_6d_1_9": {
+        #     "function": "ackley",
+        #     "function_config": {"ndim": 6, "cost1": 1, "cost2": 9},
+        #     "num_initial_samples": 13,
+        # },
         "ackley_6d_1_49": {
             "function": "ackley",
             "function_config": {"ndim": 6, "cost1": 1, "cost2": 49},
@@ -240,14 +236,14 @@ if __name__ == "__main__":
                 "warm_start_model": True,
             },
         },
-        "fn-ucb_1": {
-            "method": "fn-ucb",
-            "method_config": {
-                "alpha": 1.0,
-                "train_yvar": 1e-4,
-                "warm_start_model": True,
-            },
-        },
+        # "fn-ucb_1": {
+        #     "method": "fn-ucb",
+        #     "method_config": {
+        #         "alpha": 1.0,
+        #         "train_yvar": 1e-4,
+        #         "warm_start_model": True,
+        #     },
+        # },
         # "partial-ucb_2": {"method": "partial-ucb", "method_config": {"alpha": 2.0}},
         "full-ucb_1": {
             "method": "full-ucb",
