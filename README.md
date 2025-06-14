@@ -103,4 +103,4 @@ The experiments are conducted in `run_all_experiments.py`, which runs the propos
 ## References
 
 - [1] [Buathong, Poompol, et al. "Bayesian Optimization of Function Networks with Partial Evaluations." International Conference on Machine Learning. PMLR, 2024.](https://proceedings.mlr.press/v235/buathong24a.html)
-- [2] [S. Ament, S. Daulton, D. Eriksson, M. Balandat, and E. Bakshy. Unexpected Improvements to Expected Improvement for Bayesian Optimization. Advances in Neural Information Processing Systems 36, 2023.]()
+- [2] [S. Ament, S. Daulton, D. Eriksson, M. Balandat, and E. Bakshy. Unexpected Improvements to Expected Improvement for Bayesian Optimization. Advances in Neural Information Processing Systems 36, 2023.](https://arxiv.org/abs/2310.20708)
