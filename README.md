@@ -31,7 +31,7 @@ Also, let $f_{i_j}$ be the function $f_i$ that corresponds to $g_j$.
 For example, consider a function like $f(x) = \sin(x_1) + \cos(x_2)$.
 In this case, $f_1(x) = \sin(x)$, $f_2(x) = \cos(x)$, $f_3(x_1, x_2) = x_1 + x_2$, and
 $g_1 = f_1$, $g_2 = f_2$, $g_3 = f_3$.
-Also, $I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1)$.
+Also, $I_1(x) = (x_1), I_2(x) = (x_2), I_3(x) = (O_1(x)_1, O_2(x)_1) = (\sin(x_1), \cos(x_2))$.
 
 Each $f_i (i=1,\dots, m)$ is classified into one of the following:
 
